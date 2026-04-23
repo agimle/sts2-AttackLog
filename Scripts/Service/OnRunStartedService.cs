@@ -36,6 +36,7 @@ public static class OnRunStartedService
         if (LogState.Instance.RunLog is null || !LogState.Instance.RunLog.IsSameRun(runState))
         {
             LogState.Instance.RunLog = new RunLog(runState);
+            LogState.Instance.InvalidateCache();
         }
     }
     
@@ -54,6 +55,8 @@ public static class OnRunStartedService
         {
             LogState.Instance.RunLog?.RegisterPlayer(player);
         }
+        
+        LogState.Instance.InvalidateCache();
     }
 
     /// <summary>

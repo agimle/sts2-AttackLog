@@ -36,5 +36,6 @@ public class AfterTurnEndService
         }
         
         LogState.Instance.TurnLogsData.Clear();
+        LogState.Instance.InvalidateCache();
     }
 }

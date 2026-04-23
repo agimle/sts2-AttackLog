@@ -1,4 +1,4 @@
-﻿using AttackLog.Model;
+using AttackLog.Model;
 using AttackLog.State;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Runs;
@@ -43,5 +43,7 @@ public static class BeforeCombatStartService
             SingleRoomLogData newRoomLogData = new SingleRoomLogData();
             LogState.Instance.RoomLogsData.TryAdd(player.PlayerInfo, newRoomLogData);
         }
+        
+        LogState.Instance.InvalidateCache();
     }
 }

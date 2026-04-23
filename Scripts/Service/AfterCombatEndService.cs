@@ -41,6 +41,7 @@ public static class AfterCombatEndService
         }
         LogState.Instance.TurnLogsData.Clear();
         LogState.Instance.RoomLogsData.Clear();
+        LogState.Instance.InvalidateCache();
     }
 
     /// <summary>

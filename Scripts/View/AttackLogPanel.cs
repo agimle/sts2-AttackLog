@@ -9,14 +9,12 @@ public sealed partial class AttackLogPanel : CanvasLayer
 {
     private const float PanelWidth = 460f;
     private const float MinPanelHeight = 200f;
+    private const float RefreshInterval = 0.1f;
 
     private static readonly Color White = new("FFFFFF");
     private static readonly Color Gray = new("A0A8B4");
     private static readonly Color BgDark = new("000000B0");
     private static readonly Color Border = new("3A3A5C");
-    private static readonly Color Green = new("4ADE80");
-    private static readonly Color HeaderBg = new("1A1A2E");
-    private static readonly Color RowAlt = new("0D0D1A");
     private static readonly Color PercentColor = new("EC4899");
     private static readonly Color TotalColor = new("F59E0B");
     private static readonly Color RoomColor = new("10B981");
@@ -27,6 +25,10 @@ public sealed partial class AttackLogPanel : CanvasLayer
     private PanelContainer? _root;
     private VBoxContainer? _playerList;
     private Label? _emptyLabel;
+
+    private Dictionary<PlayerInfo, PanelContainer> _playerRows = new();
+    private float _lastRefreshTime = 0f;
+    private bool _refreshRequested = false;
 
     public override void _EnterTree()
     {
@@ -43,6 +45,20 @@ public sealed partial class AttackLogPanel : CanvasLayer
     {
         BuildUi();
         Refresh();
+    }
+
+    public override void _Process(double delta)
+    {
+        if (_refreshRequested)
+        {
+            float currentTime = Time.GetTicksMsec() / 1000f;
+            if (currentTime - _lastRefreshTime >= RefreshInterval)
+            {
+                Refresh();
+                _lastRefreshTime = currentTime;
+                _refreshRequested = false;
+            }
+        }
     }
 
     private void BuildUi()
@@ -113,16 +129,12 @@ public sealed partial class AttackLogPanel : CanvasLayer
     {
         if (_playerList == null || _emptyLabel == null) return;
 
-        foreach (var child in _playerList.GetChildren())
-        {
-            child.QueueFree();
-        }
-
         var runLog = LogState.Instance.RunLog;
         if (runLog == null)
         {
             _emptyLabel.Visible = true;
             _emptyLabel.Text = "No active run";
+            ClearAllRows();
             return;
         }
 
@@ -131,18 +143,51 @@ public sealed partial class AttackLogPanel : CanvasLayer
         {
             _emptyLabel.Visible = true;
             _emptyLabel.Text = "No players registered";
+            ClearAllRows();
             return;
         }
 
         _emptyLabel.Visible = false;
 
+        var currentPlayerInfos = new HashSet<PlayerInfo>(players.Select(p => p.PlayerInfo));
+
+        var toRemove = _playerRows.Keys
+            .Where(info => !currentPlayerInfos.Contains(info))
+            .ToList();
+
+        foreach (var info in toRemove)
+        {
+            if (_playerRows.TryGetValue(info, out var row))
+            {
+                row.QueueFree();
+                _playerRows.Remove(info);
+            }
+        }
+
         int index = 0;
         foreach (var playerData in players)
         {
-            var row = BuildPlayerRow(playerData, index);
-            _playerList.AddChild(row);
+            if (_playerRows.TryGetValue(playerData.PlayerInfo, out var existingRow))
+            {
+                UpdatePlayerRow(existingRow, playerData, index);
+            }
+            else
+            {
+                var newRow = BuildPlayerRow(playerData, index);
+                _playerList.AddChild(newRow);
+                _playerRows[playerData.PlayerInfo] = newRow;
+            }
             index++;
         }
+    }
+
+    private void ClearAllRows()
+    {
+        foreach (var row in _playerRows.Values)
+        {
+            row.QueueFree();
+        }
+        _playerRows.Clear();
     }
 
     private static List<PlayerData> GetRegisteredPlayers()
@@ -245,28 +290,30 @@ public sealed partial class AttackLogPanel : CanvasLayer
         nameLabel.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         row.AddChild(nameLabel);
 
-        AttackLogViewUtils.GetPlayerLog(playerData.PlayerInfo, out AttackLogModel? turnLog, out AttackLogModel? roomLog,
-            out AttackLogModel? runLog);
-        AttackLogViewUtils.GetDamagePercent(playerData.PlayerInfo, out float damagePercent);
+        var stats = LogState.Instance.GetCachedStats(playerData.PlayerInfo);
+        if (stats == null)
+        {
+            stats = new CachedPlayerStats();
+        }
 
-        var percentLabel = MakeLabel($"{damagePercent:F1}%", 14, PercentColor);
+        var percentLabel = MakeLabel($"{stats.DamagePercent:F1}%", 14, PercentColor);
         percentLabel.CustomMinimumSize = new Vector2(60, 0);
         percentLabel.HorizontalAlignment = HorizontalAlignment.Right;
         row.AddChild(percentLabel);
 
-        var runDamage = runLog?.RealDamageDealt ?? 0;
+        var runDamage = stats.RunLog?.RealDamageDealt ?? 0;
         var runDamageLabel = MakeLabel($"{runDamage}", 14, TotalColor);
         runDamageLabel.CustomMinimumSize = new Vector2(60, 0);
         runDamageLabel.HorizontalAlignment = HorizontalAlignment.Right;
         row.AddChild(runDamageLabel);
 
-        var roomDamage = roomLog?.RealDamageDealt ?? 0;
+        var roomDamage = stats.RoomLog?.RealDamageDealt ?? 0;
         var roomDamageLabel = MakeLabel($"{roomDamage}", 14, RoomColor);
         roomDamageLabel.CustomMinimumSize = new Vector2(60, 0);
         roomDamageLabel.HorizontalAlignment = HorizontalAlignment.Right;
         row.AddChild(roomDamageLabel);
 
-        var turnDamage = turnLog?.RealDamageDealt ?? 0;
+        var turnDamage = stats.TurnLog?.RealDamageDealt ?? 0;
         var turnDamageLabel = MakeLabel($"{turnDamage}", 14, TurnColor);
         turnDamageLabel.CustomMinimumSize = new Vector2(60, 0);
         turnDamageLabel.HorizontalAlignment = HorizontalAlignment.Right;
@@ -274,6 +321,23 @@ public sealed partial class AttackLogPanel : CanvasLayer
 
         card.AddChild(row);
         return card;
+    }
+
+    private static void UpdatePlayerRow(PanelContainer card, PlayerData playerData, int rowIndex)
+    {
+        var row = card.GetChild(0) as HBoxContainer;
+        if (row == null) return;
+
+        var labels = row.GetChildren().OfType<Label>().ToList();
+        if (labels.Count < 5) return;
+
+        var stats = LogState.Instance.GetCachedStats(playerData.PlayerInfo);
+        if (stats == null) return;
+
+        labels[1].Text = $"{stats.DamagePercent:F1}%";
+        labels[2].Text = $"{stats.RunLog?.RealDamageDealt ?? 0}";
+        labels[3].Text = $"{stats.RoomLog?.RealDamageDealt ?? 0}";
+        labels[4].Text = $"{stats.TurnLog?.RealDamageDealt ?? 0}";
     }
 
     private static Color DarkenColor(Color color, float amount)
@@ -319,7 +383,18 @@ public sealed partial class AttackLogPanel : CanvasLayer
 
     public static void RefreshInstance()
     {
-        _instance?.Refresh();
+        if (_instance == null) return;
+
+        float currentTime = Time.GetTicksMsec() / 1000f;
+        if (currentTime - _instance._lastRefreshTime >= RefreshInterval)
+        {
+            _instance.Refresh();
+            _instance._lastRefreshTime = currentTime;
+        }
+        else
+        {
+            _instance._refreshRequested = true;
+        }
     }
 
     public static void CreatePanel(RunState runState)

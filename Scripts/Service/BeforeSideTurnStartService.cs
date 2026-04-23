@@ -29,11 +29,13 @@ public static class BeforeSideTurnStartService
         // 遍历所有注册过的用户
         foreach (var player in LogState.Instance.RunLog.GetAllPlayers())
         {
-            // 为每一个玩家创建新的回合记录
             SingleTurnLogData newTurnLogData = new  SingleTurnLogData();
             LogState.Instance.TurnLogsData.TryAdd(player.PlayerInfo, newTurnLogData);
         }
-    }
+        
+        LogState.Instance.InvalidateCache();
+    }      
+    
 
     /// <summary>
     /// 更新PoisonPower的层数

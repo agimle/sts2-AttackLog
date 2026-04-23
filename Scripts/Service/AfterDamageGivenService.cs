@@ -81,6 +81,8 @@ public static class AfterDamageGivenService
         
         turnLogData?.EnqueueAttackLogData(newAttackLog);
         turnLogData?.TurnLogSum.Plus(newAttackLog);
+        
+        LogState.Instance.InvalidateCache();
     }
 
 
@@ -131,7 +133,9 @@ public static class AfterDamageGivenService
             // 存
         
             turnLogData?.EnqueueAttackLogData(newAttackLog);
-            turnLogData?.TurnLogSum.Plus(newAttackLog); 
+            turnLogData?.TurnLogSum.Plus(newAttackLog);
+            
+            LogState.Instance.InvalidateCache();
         }
     }
 }

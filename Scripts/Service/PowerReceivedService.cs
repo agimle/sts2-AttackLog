@@ -1,4 +1,5 @@
-﻿using AttackLog.Logger;
+using AttackLog.Core;
+using AttackLog.Logger;
 using AttackLog.Model;
 using AttackLog.State;
 using MegaCrit.Sts2.Core.Combat;
@@ -10,22 +11,25 @@ namespace AttackLog.Service;
 
 public static class PowerReceivedService
 {
-    /// <summary>
-    /// 尝试获取记录
-    /// </summary>
-    /// <param name="combatState"></param>
-    /// <param name="power"></param>
-    /// <param name="amount"></param>
-    /// <param name="applier"></param>
-    /// <returns></returns>
+    public static void Subscribe()
+    {
+        AttackLogEventBus.Subscribe(AttackLogEventType.PowerReceived, OnPowerReceived);
+    }
+
+    private static void OnPowerReceived(IAttackLogEvent e)
+    {
+        var evt = (PowerReceivedEvent)e;
+        AddPowerRecordToCombatRecord(evt.CombatState, evt.Power, evt.Amount, evt.Applier);
+    }
+
     private static IPowerRecord? TryCatchPowerRecord(CombatState combatState, PowerModel power, decimal amount,
         Creature? applier)
     {
-        if(applier is null)
+        if (applier is null)
         {
             return null;
         }
-        
+
         IPowerRecord? powerRecord = PowerRecordFactory.Create(power, applier, (int)amount, combatState.RoundNumber);
 
         return powerRecord;
@@ -37,6 +41,6 @@ public static class PowerReceivedService
         IPowerRecord? powerRecord = TryCatchPowerRecord(combatState, power, amount, applier);
         if (powerRecord is null) return;
 
-        LogState.Instance.CombatRecord.AddPowerRecord(power.Owner,powerRecord);
+        LogState.Instance.CombatRecord.AddPowerRecord(power.Owner, powerRecord);
     }
 }

@@ -1,4 +1,5 @@
 using Godot;
+using AttackLog.Core;
 using AttackLog.Model;
 using AttackLog.State;
 using MegaCrit.Sts2.Core.Runs;
@@ -20,6 +21,20 @@ public sealed partial class AttackLogPanel : CanvasLayer
     private static readonly Color RoomColor = new("10B981");
     private static readonly Color TurnColor = new("6366F1");
 
+    private static readonly AttackLogEventType[] RefreshOnEvents =
+    {
+        AttackLogEventType.RunStarted,
+        AttackLogEventType.BeforeCombatStart,
+        AttackLogEventType.BeforeSideTurnStart,
+        AttackLogEventType.AfterTurnEnd,
+        AttackLogEventType.AfterCombatEnd,
+        AttackLogEventType.AfterDamageGiven,
+        AttackLogEventType.AfterDeath,
+        AttackLogEventType.PowerReceived,
+        AttackLogEventType.DoomKill,
+        AttackLogEventType.RefreshRequested
+    };
+
     private static AttackLogPanel? _instance;
 
     private PanelContainer? _root;
@@ -39,6 +54,7 @@ public sealed partial class AttackLogPanel : CanvasLayer
     public override void _ExitTree()
     {
         if (ReferenceEquals(_instance, this)) _instance = null;
+        UnsubscribeAll();
     }
 
     public override void _Ready()
@@ -58,6 +74,41 @@ public sealed partial class AttackLogPanel : CanvasLayer
                 _lastRefreshTime = currentTime;
                 _refreshRequested = false;
             }
+        }
+    }
+
+    private void OnGameEvent(IAttackLogEvent e)
+    {
+        RequestRefresh();
+    }
+
+    private void RequestRefresh()
+    {
+        float currentTime = Time.GetTicksMsec() / 1000f;
+        if (currentTime - _lastRefreshTime >= RefreshInterval)
+        {
+            Refresh();
+            _lastRefreshTime = currentTime;
+        }
+        else
+        {
+            _refreshRequested = true;
+        }
+    }
+
+    private void SubscribeAll()
+    {
+        foreach (var eventType in RefreshOnEvents)
+        {
+            AttackLogEventBus.Subscribe(eventType, OnGameEvent);
+        }
+    }
+
+    private void UnsubscribeAll()
+    {
+        foreach (var eventType in RefreshOnEvents)
+        {
+            AttackLogEventBus.Unsubscribe(eventType, OnGameEvent);
         }
     }
 
@@ -379,22 +430,13 @@ public sealed partial class AttackLogPanel : CanvasLayer
         var sceneTree = Engine.GetMainLoop() as SceneTree;
         sceneTree?.Root.AddChild(_instance);
         LogState.Instance.IsLogPanelCreated = true;
+
+        _instance.SubscribeAll();
     }
 
     public static void RefreshInstance()
     {
-        if (_instance == null) return;
-
-        float currentTime = Time.GetTicksMsec() / 1000f;
-        if (currentTime - _instance._lastRefreshTime >= RefreshInterval)
-        {
-            _instance.Refresh();
-            _instance._lastRefreshTime = currentTime;
-        }
-        else
-        {
-            _instance._refreshRequested = true;
-        }
+        AttackLogEventBus.Publish(new RefreshRequestedEvent());
     }
 
     public static void CreatePanel(RunState runState)

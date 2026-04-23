@@ -1,7 +1,5 @@
-using System.Security.Cryptography;
 using AttackLog.Model;
 using AttackLog.Save;
-using MegaCrit.Sts2.Core.Combat;
 
 namespace AttackLog.State;
 
@@ -24,25 +22,57 @@ public class LogState
     private LogState()
     {
         IsLogPanelCreated = false;
-        RunLog =  null;
-        RoomLogsData = new Dictionary<PlayerInfo,SingleRoomLogData>();
-        TurnLogsData = new Dictionary<PlayerInfo,SingleTurnLogData>();
+        _runState = new AttackLogRunState();
+        _combatState = new AttackLogCombatState();
         _viewCache = new ViewCache();
     }
     #endregion
-    
-    public ModSave? ModSave;
-    
-    public bool IsLogPanelCreated  { get; set; }
-    
-    public RunLog? RunLog { get; set; }
-    
-    public Dictionary<PlayerInfo,SingleRoomLogData> RoomLogsData { get; set; }
-    public Dictionary<PlayerInfo,SingleTurnLogData> TurnLogsData { get; set; }
-    
-    public CombatRecord CombatRecord { get; set; } =  new CombatRecord();
 
-    private ViewCache _viewCache;
+    private readonly AttackLogRunState _runState;
+    private readonly AttackLogCombatState _combatState;
+    private readonly ViewCache _viewCache;
+
+    public bool IsLogPanelCreated { get; set; }
+
+    #region RunState 代理属性
+
+    public RunLog? RunLog
+    {
+        get => _runState.RunLog;
+        set => _runState.RunLog = value;
+    }
+
+    public ModSave? ModSave
+    {
+        get => _runState.ModSave;
+        set => _runState.ModSave = value;
+    }
+
+    #endregion
+
+    #region CombatState 代理属性
+
+    public Dictionary<PlayerInfo, SingleRoomLogData> RoomLogsData
+    {
+        get => _combatState.RoomLogsData;
+        set => _combatState.RoomLogsData = value;
+    }
+
+    public Dictionary<PlayerInfo, SingleTurnLogData> TurnLogsData
+    {
+        get => _combatState.TurnLogsData;
+        set => _combatState.TurnLogsData = value;
+    }
+
+    public CombatRecord CombatRecord
+    {
+        get => _combatState.CombatRecord;
+        set => _combatState.CombatRecord = value;
+    }
+
+    #endregion
+
+    #region ViewCache 代理方法
 
     public void InvalidateCache()
     {
@@ -58,4 +88,30 @@ public class LogState
     {
         return _viewCache.GetAllStats();
     }
+
+    #endregion
+
+    #region 子状态访问
+
+    public AttackLogRunState GetRunState() => _runState;
+    public AttackLogCombatState GetCombatState() => _combatState;
+    public ViewCache GetViewCache() => _viewCache;
+
+    #endregion
+
+    #region 生命周期方法
+
+    public void OnCombatStart()
+    {
+        _combatState.OnCombatStart();
+        InvalidateCache();
+    }
+
+    public void OnCombatEnd()
+    {
+        _combatState.OnCombatEnd();
+        InvalidateCache();
+    }
+
+    #endregion
 }

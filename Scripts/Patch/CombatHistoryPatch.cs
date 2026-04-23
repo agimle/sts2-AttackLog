@@ -1,14 +1,14 @@
-﻿using AttackLog.Core;
+using AttackLog.Core;
 using MegaCrit.Sts2.Core.Combat;
+using MegaCrit.Sts2.Core.Combat.History;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Models;
 
 namespace AttackLog.Patch;
 
-public class CombatHistoryPatch
+public static class CombatHistoryPatch
 {
-    public static void PowerReceivedPostfix(CombatState combatState, PowerModel power, decimal amount,
-        Creature? applier)
+    public static void PowerReceivedPostfix(CombatState combatState, PowerModel power, decimal amount, Creature? applier)
     {
         AttackLogEventBus.Publish(new PowerReceivedEvent
         {

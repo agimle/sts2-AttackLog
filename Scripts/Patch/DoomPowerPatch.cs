@@ -1,4 +1,4 @@
-﻿using AttackLog.Core;
+using AttackLog.Core;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 
 namespace AttackLog.Patch;

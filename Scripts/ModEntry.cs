@@ -1,7 +1,8 @@
-﻿using AttackLog.Logger;
+﻿using AttackLog.Core;
+using AttackLog.Logger;
 using AttackLog.Model;
 using AttackLog.Patch;
-using AttackLog.Service;
+using AttackLog.View;
 using Godot.Bridge;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Combat.History;
@@ -25,7 +26,7 @@ public class ModEntry
         }
         _harmony = new Harmony("com.agimle.sts2.attack_log");
 
-        SubscribeAllServices();
+        AttackLogServiceLocator.Initialize();
 
         HookPatches.OnRunStartPostfix();
 
@@ -50,22 +51,11 @@ public class ModEntry
 
         LoadPowerRecordFactory();
 
+        AttackLogPanel.SubscribeCreationEvent();
+
         ModLogger.Clear();
         ModLogger.Log("模组初始化完成");
         Log.Info("Mod initialized!");
-    }
-
-    private static void SubscribeAllServices()
-    {
-        OnRunStartedService.Subscribe();
-        BeforeCombatStartService.Subscribe();
-        BeforeSideTurnStartService.Subscribe();
-        AfterTurnEndService.Subscribe();
-        AfterCombatEndService.Subscribe();
-        AfterDamageGivenService.Subscribe();
-        AfterDeathService.Subscribe();
-        PowerReceivedService.Subscribe();
-        DoomKillService.Subscribe();
     }
 
     private static void LoadPowerRecordFactory()

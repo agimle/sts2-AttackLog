@@ -1,34 +1,23 @@
-﻿using AttackLog.Core;
-using HarmonyLib;
+using AttackLog.Core;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Hooks;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.ValueProps;
 
 namespace AttackLog.Patch;
 
-#region 战斗相关
-
-public static partial class HookPatches
+public static class HookPatches
 {
     public static void OnRunStartPostfix()
     {
-        RunManager.Instance.RunStarted += OnRunStartedHandler;
+        RunManager.Instance.RunStarted += OnRunStarted;
     }
 
-    private static void OnRunStartedHandler(IRunState runState)
-    {
-        AttackLogEventBus.Publish(new RunStartedEvent { RunState = runState });
-    }
-}
-
-
-public static partial class HookPatches
-{
-    public static void BeforeCombatStartPostfix(IRunState? runState, CombatState? combatState)
+    public static void BeforeCombatStartPostfix(IRunState runState, CombatState? combatState)
     {
         AttackLogEventBus.Publish(new BeforeCombatStartEvent
         {
@@ -55,7 +44,7 @@ public static partial class HookPatches
         });
     }
 
-    public static void AfterCombatEndPostfix(IRunState? runState, CombatState? combatState)
+    public static void AfterCombatEndPostfix(IRunState runState, CombatState? combatState, CombatRoom room)
     {
         AttackLogEventBus.Publish(new AfterCombatEndEvent
         {
@@ -63,19 +52,8 @@ public static partial class HookPatches
             CombatState = combatState
         });
     }
-}
-#endregion
 
-#region 攻击相关
-public static partial class HookPatches
-{
-    public static void AfterDamageGivenPostfix(
-        PlayerChoiceContext choiceContext,
-        Creature? dealer,
-        DamageResult results,
-        ValueProp props,
-        Creature target,
-        CardModel? cardSource)
+    public static void AfterDamageGivenPostfix(PlayerChoiceContext choiceContext, CombatState combatState, Creature? dealer, DamageResult results, ValueProp props, Creature target, CardModel? cardSource)
     {
         AttackLogEventBus.Publish(new AfterDamageGivenEvent
         {
@@ -86,18 +64,19 @@ public static partial class HookPatches
         });
     }
 
-    public static void AfterDeathPostfix(
-        IRunState runState,
-        CombatState? combatState,
-        Creature creature,
-        bool wasRemovalPrevented,
-        float deathAnimLength
-    )
+    public static void AfterDeathPostfix(IRunState runState, CombatState? combatState, Creature creature, bool wasRemovalPrevented, float deathAnimLength)
     {
         AttackLogEventBus.Publish(new AfterDeathEvent
         {
             Creature = creature
         });
     }
+
+    private static void OnRunStarted(RunState runState)
+    {
+        AttackLogEventBus.Publish(new RunStartedEvent
+        {
+            RunState = runState
+        });
+    }
 }
-#endregion

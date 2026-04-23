@@ -2,6 +2,7 @@ using Godot;
 using AttackLog.Core;
 using AttackLog.Model;
 using AttackLog.State;
+using AttackLog.Utils;
 using MegaCrit.Sts2.Core.Runs;
 
 namespace AttackLog.View;
@@ -36,6 +37,7 @@ public sealed partial class AttackLogPanel : CanvasLayer
     };
 
     private static AttackLogPanel? _instance;
+    private static ILogDataProvider _dataProvider = LogDataProvider.Default;
 
     private PanelContainer? _root;
     private VBoxContainer? _playerList;
@@ -44,6 +46,11 @@ public sealed partial class AttackLogPanel : CanvasLayer
     private Dictionary<PlayerInfo, PanelContainer> _playerRows = new();
     private float _lastRefreshTime = 0f;
     private bool _refreshRequested = false;
+
+    public static void SetDataProvider(ILogDataProvider provider)
+    {
+        _dataProvider = provider ?? LogDataProvider.Default;
+    }
 
     public override void _EnterTree()
     {
@@ -180,8 +187,7 @@ public sealed partial class AttackLogPanel : CanvasLayer
     {
         if (_playerList == null || _emptyLabel == null) return;
 
-        var runLog = LogState.Instance.RunLog;
-        if (runLog == null)
+        if (!_dataProvider.HasActiveRun)
         {
             _emptyLabel.Visible = true;
             _emptyLabel.Text = "No active run";
@@ -189,7 +195,7 @@ public sealed partial class AttackLogPanel : CanvasLayer
             return;
         }
 
-        var players = GetRegisteredPlayers();
+        var players = _dataProvider.GetPlayers();
         if (players.Count == 0)
         {
             _emptyLabel.Visible = true;
@@ -239,17 +245,6 @@ public sealed partial class AttackLogPanel : CanvasLayer
             row.QueueFree();
         }
         _playerRows.Clear();
-    }
-
-    private static List<PlayerData> GetRegisteredPlayers()
-    {
-        var result = new List<PlayerData>();
-
-        var runLog = LogState.Instance.RunLog;
-        if (runLog == null) return result;
-
-        result.AddRange(runLog.GetAllPlayers());
-        return result;
     }
 
     private static HBoxContainer BuildHeaderRow()
@@ -341,11 +336,7 @@ public sealed partial class AttackLogPanel : CanvasLayer
         nameLabel.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         row.AddChild(nameLabel);
 
-        var stats = LogState.Instance.GetCachedStats(playerData.PlayerInfo);
-        if (stats == null)
-        {
-            stats = new CachedPlayerStats();
-        }
+        var stats = _dataProvider.GetPlayerStats(playerData.PlayerInfo) ?? new CachedPlayerStats();
 
         var percentLabel = MakeLabel($"{stats.DamagePercent:F1}%", 14, PercentColor);
         percentLabel.CustomMinimumSize = new Vector2(60, 0);
@@ -382,7 +373,7 @@ public sealed partial class AttackLogPanel : CanvasLayer
         var labels = row.GetChildren().OfType<Label>().ToList();
         if (labels.Count < 5) return;
 
-        var stats = LogState.Instance.GetCachedStats(playerData.PlayerInfo);
+        var stats = _dataProvider.GetPlayerStats(playerData.PlayerInfo);
         if (stats == null) return;
 
         labels[1].Text = $"{stats.DamagePercent:F1}%";
@@ -440,6 +431,17 @@ public sealed partial class AttackLogPanel : CanvasLayer
     }
 
     public static void CreatePanel(RunState runState)
+    {
+        EnsureCreated();
+        RefreshInstance();
+    }
+
+    public static void SubscribeCreationEvent()
+    {
+        AttackLogEventBus.Subscribe(AttackLogEventType.RunStarted, OnRunStartedForCreation);
+    }
+
+    private static void OnRunStartedForCreation(IAttackLogEvent e)
     {
         EnsureCreated();
         RefreshInstance();

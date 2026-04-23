@@ -12,6 +12,10 @@ public class PlayerInfo
     /// </summary>
     public ulong NetId { get; private set; }
     /// <summary>
+    /// 玩家昵称
+    /// </summary>
+    public string PlayerName { get; private set; }
+    /// <summary>
     /// 玩家生物
     /// </summary>
     public Creature Creature { get; set; }
@@ -32,13 +36,15 @@ public class PlayerInfo
     /// 构造
     /// </summary>
     /// <param name="netId"></param>
+    /// <param name="playerName"></param>
     /// <param name="creature"></param>
     /// <param name="title"></param>
     /// <param name="nameColor"></param>
     /// <param name="iconTexture"></param>
-    public PlayerInfo(ulong netId, Creature creature, LocString title, Color nameColor, Texture2D iconTexture)
+    public PlayerInfo(ulong netId, string playerName, Creature creature, LocString title, Color nameColor, Texture2D iconTexture)
     {
         NetId = netId;
+        PlayerName = playerName;
         Creature = creature;
         Title = title;
         NameColor = nameColor;

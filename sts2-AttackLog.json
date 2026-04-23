@@ -1,11 +1,11 @@
 {
   "id": "sts2-AttackLog",
-  "name": "AttackLog",
+  "name": "Attack Log",
   "author": "agimle",
-  "description": "Tracks and shows  each player's total run data.",
+  "description": "Tracks and shows each player's total run data.",
   "version": "1.0",
   "has_pck": true,
   "has_dll": true,   
-  "dependencies": [""],    
+  "dependencies": [],    
   "affects_gameplay": false 
 }

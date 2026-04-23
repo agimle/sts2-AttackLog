@@ -24,6 +24,10 @@
     </Reference>
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="Scripts\开发日志.md" />
+  </ItemGroup>
+
   <!-- 自动复制dll和json -->
   <Target Name="Copy Mod" AfterTargets="PostBuildEvent">
     <Message Text="Copying mod to Slay the Spire 2 mods folder..." Importance="high" />

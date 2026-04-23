@@ -2,9 +2,13 @@ namespace AttackLog.Model;
 
 public class SingleRunLogData
 {
+    private const int MaxRoomHistory = 50;
+
     public Queue<SingleRoomLogData> RoomLogs { get; set; }
 
     public AttackLogModel RunLogSum { get; set; }
+
+    public int TotalRoomCount { get; private set; }
 
     public SingleRunLogData()
     {
@@ -14,6 +18,12 @@ public class SingleRunLogData
 
     public void EnqueueRoomLogData(SingleRoomLogData data)
     {
+        TotalRoomCount++;
         RoomLogs.Enqueue(data);
+
+        while (RoomLogs.Count > MaxRoomHistory)
+        {
+            RoomLogs.Dequeue();
+        }
     }
 }

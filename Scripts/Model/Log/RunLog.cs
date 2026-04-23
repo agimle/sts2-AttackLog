@@ -8,7 +8,6 @@ public class RunLog
 {
     private readonly IRunState _runState;
     private readonly Dictionary<ulong, PlayerData> _netIdToPlayers = new();
-    private readonly Dictionary<Creature, PlayerData> _creaturesToPlayers = new();
 
     public RunLog(IRunState runState)
     {
@@ -24,7 +23,6 @@ public class RunLog
     {
         var playerData = new PlayerData(player);
         _netIdToPlayers.TryAdd(player.NetId, playerData);
-        _creaturesToPlayers.TryAdd(player.Creature, playerData);
     }
 
     public PlayerData? GetPlayerByNetId(ulong netId)
@@ -34,7 +32,12 @@ public class RunLog
 
     public PlayerData? GetPlayerByCreature(Creature creature)
     {
-        return _creaturesToPlayers.TryGetValue(creature, out var data) ? data : null;
+        foreach (var playerData in _netIdToPlayers.Values)
+        {
+            if (ReferenceEquals(playerData.PlayerInfo.Creature, creature))
+                return playerData;
+        }
+        return null;
     }
 
     public IReadOnlyCollection<PlayerData> GetAllPlayers()

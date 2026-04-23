@@ -1,10 +1,12 @@
-﻿using MegaCrit.Sts2.Core.Entities.Creatures;
+using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Models;
 
 namespace AttackLog.Model;
 
 public class MonsterRecord
 {
+    private const int MaxPowerRecordHistory = 50;
+
     public Creature Creature { get; set; }
     public Dictionary<Type, Queue<IPowerRecord>> Powers { get; private set; }
     
@@ -14,10 +16,6 @@ public class MonsterRecord
         Powers = new Dictionary<Type, Queue<IPowerRecord>>();
     }
 
-    /// <summary>
-    /// Power入队
-    /// </summary>
-    /// <param name="record"></param>
     public void Enqueue(IPowerRecord record)
     {
         Powers.TryGetValue(record.PowerType, out var queue);
@@ -29,6 +27,11 @@ public class MonsterRecord
         else
         {
             queue.Enqueue(record);
+
+            while (queue.Count > MaxPowerRecordHistory)
+            {
+                queue.Dequeue();
+            }
         }
     }
     

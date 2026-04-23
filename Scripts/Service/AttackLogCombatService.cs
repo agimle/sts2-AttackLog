@@ -121,7 +121,7 @@ public class AttackLogCombatService : IAttackLogService
 
         foreach (var monsterRecord in LogState.Instance.CombatRecord.MonsterRecords)
         {
-            foreach (var powerRecord in monsterRecord.Value.Powers)
+            foreach (var powerRecord in monsterRecord.Powers)
             {
                 if (powerRecord.Key == typeof(PoisonPower))
                 {

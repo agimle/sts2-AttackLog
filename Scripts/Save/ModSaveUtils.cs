@@ -1,5 +1,4 @@
-﻿using System.Diagnostics;
-using System.Text.Json;
+﻿using System.Text.Json;
 using AttackLog.Logger;
 using AttackLog.Model;
 using AttackLog.State;
@@ -10,69 +9,53 @@ namespace AttackLog.Save;
 
 public static class ModSaveUtils
 {
-    /// <summary>
-    /// 加载数据文件
-    /// </summary>
-    /// <param name="runState"></param>
     public static void Load(IRunState runState)
     {
-        // 不存在文件
         if (!File.Exists(ModSaveConfig.SavePath))
         {
             LogState.Instance.ModSave = new ModSave(runState);
             OutputData();
+            return;
         }
-        else
+
+        try
         {
-            try
+            string saveJson = File.ReadAllText(ModSaveConfig.SavePath);
+            ModSave? modSave = JsonSerializer.Deserialize<ModSave>(saveJson, ModSaveConfig.JsonOptions);
+            if (modSave == null || modSave.Seed != runState.Rng.Seed)
             {
-                string saveJson = File.ReadAllText(ModSaveConfig.SavePath);
-                ModSave? modSave = JsonSerializer.Deserialize<ModSave>(saveJson, ModSaveConfig.JsonOptions);
-                if(modSave == null || modSave.Seed != runState.Rng.Seed)
-                {
-                    LogState.Instance.ModSave = new ModSave(runState);
-                    OutputData();
-                }
-                else
-                {
-                    LogState.Instance.ModSave = modSave;
-                    InputData();
-                }
+                LogState.Instance.ModSave = new ModSave(runState);
+                OutputData();
             }
-            catch (Exception ex)
+            else
             {
-                
+                LogState.Instance.ModSave = modSave;
+                InputData();
             }
+        }
+        catch (Exception ex)
+        {
+            ModLogger.Log("Save", $"Failed to load save: {ex.Message}");
+            LogState.Instance.ModSave = new ModSave(runState);
+            OutputData();
         }
     }
 
-    /// <summary>
-    /// 保存数据存档
-    /// </summary>
-    /// <param name="runState"></param>
-    /// <param name="combatState"></param>
     public static void Save(IRunState? runState, CombatState? combatState)
     {
-        if (LogState.Instance.ModSave == null)
-        {
-            return;
-        }
-        
-        if(runState?.Rng.Seed != LogState.Instance.ModSave.Seed)
-        {
-            return;
-        }
-        
+        if (LogState.Instance.ModSave == null) return;
+        if (runState?.Rng.Seed != LogState.Instance.ModSave.Seed) return;
+
         OutputData();
-        
+
         try
         {
             string saveJson = JsonSerializer.Serialize(LogState.Instance.ModSave, ModSaveConfig.JsonOptions);
             File.WriteAllText(ModSaveConfig.SavePath, saveJson);
         }
-        catch
+        catch (Exception ex)
         {
-            
+            ModLogger.Log("Save", $"Failed to save: {ex.Message}");
         }
     }
 

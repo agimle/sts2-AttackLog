@@ -12,49 +12,45 @@ public class AttackLogCombatService : IAttackLogService
 {
     public void Subscribe()
     {
-        AttackLogEventBus.Subscribe(AttackLogEventType.BeforeCombatStart, OnBeforeCombatStart);
-        AttackLogEventBus.Subscribe(AttackLogEventType.AfterCombatEnd, OnAfterCombatEnd);
-        AttackLogEventBus.Subscribe(AttackLogEventType.BeforeSideTurnStart, OnBeforeSideTurnStart);
-        AttackLogEventBus.Subscribe(AttackLogEventType.AfterTurnEnd, OnAfterTurnEnd);
+        AttackLogEventBus.Subscribe<BeforeCombatStartEvent>(OnBeforeCombatStart);
+        AttackLogEventBus.Subscribe<AfterCombatEndEvent>(OnAfterCombatEnd);
+        AttackLogEventBus.Subscribe<BeforeSideTurnStartEvent>(OnBeforeSideTurnStart);
+        AttackLogEventBus.Subscribe<AfterTurnEndEvent>(OnAfterTurnEnd);
     }
 
     public void Unsubscribe()
     {
-        AttackLogEventBus.Unsubscribe(AttackLogEventType.BeforeCombatStart, OnBeforeCombatStart);
-        AttackLogEventBus.Unsubscribe(AttackLogEventType.AfterCombatEnd, OnAfterCombatEnd);
-        AttackLogEventBus.Unsubscribe(AttackLogEventType.BeforeSideTurnStart, OnBeforeSideTurnStart);
-        AttackLogEventBus.Unsubscribe(AttackLogEventType.AfterTurnEnd, OnAfterTurnEnd);
+        AttackLogEventBus.Unsubscribe<BeforeCombatStartEvent>(OnBeforeCombatStart);
+        AttackLogEventBus.Unsubscribe<AfterCombatEndEvent>(OnAfterCombatEnd);
+        AttackLogEventBus.Unsubscribe<BeforeSideTurnStartEvent>(OnBeforeSideTurnStart);
+        AttackLogEventBus.Unsubscribe<AfterTurnEndEvent>(OnAfterTurnEnd);
     }
 
-    private void OnBeforeCombatStart(IAttackLogEvent e)
+    private void OnBeforeCombatStart(BeforeCombatStartEvent evt)
     {
-        var evt = (BeforeCombatStartEvent)e;
         CreateNewRoomLog(evt.RunState, evt.CombatState);
     }
 
-    private void OnAfterCombatEnd(IAttackLogEvent e)
+    private void OnAfterCombatEnd(AfterCombatEndEvent evt)
     {
-        var evt = (AfterCombatEndEvent)e;
         SaveRoomLog(evt.RunState, evt.CombatState);
         SaveLogState(evt.RunState, evt.CombatState);
     }
 
-    private void OnBeforeSideTurnStart(IAttackLogEvent e)
+    private void OnBeforeSideTurnStart(BeforeSideTurnStartEvent evt)
     {
-        var evt = (BeforeSideTurnStartEvent)e;
         CreateNewTurnLog(evt.CombatState, evt.Side);
         UpdatePoisonPower(evt.CombatState, evt.Side);
     }
 
-    private void OnAfterTurnEnd(IAttackLogEvent e)
+    private void OnAfterTurnEnd(AfterTurnEndEvent evt)
     {
-        var evt = (AfterTurnEndEvent)e;
         SaveTurnLog(evt.CombatState, evt.Side);
     }
 
-    private void CreateNewRoomLog(IRunState? runState, CombatState? combatState)
+    private void CreateNewRoomLog(IRunState runState, CombatState combatState)
     {
-        if (LogState.Instance.RunLog is null || runState is null) return;
+        if (LogState.Instance.RunLog is null) return;
         if (!LogState.Instance.RunLog.IsSameRun(runState)) return;
 
         LogState.Instance.OnCombatStart();
@@ -68,9 +64,9 @@ public class AttackLogCombatService : IAttackLogService
         LogState.Instance.InvalidateCache();
     }
 
-    private void SaveRoomLog(IRunState? runState, CombatState? combatState)
+    private void SaveRoomLog(IRunState runState, CombatState combatState)
     {
-        if (runState is null || LogState.Instance.RunLog == null) return;
+        if (LogState.Instance.RunLog == null) return;
         if (!LogState.Instance.RunLog.IsSameRun(runState)) return;
 
         foreach (var player in LogState.Instance.RunLog.GetAllPlayers())
@@ -80,20 +76,20 @@ public class AttackLogCombatService : IAttackLogService
             if (turnLogData != null && roomLogData != null)
             {
                 roomLogData.EnqueueTurnLogData(turnLogData);
-                roomLogData.RoomLogSum.Plus(turnLogData.TurnLogSum);
+                roomLogData.RoomLogSum.Add(turnLogData.TurnLogSum);
             }
 
             if (roomLogData != null)
             {
                 player.RunLogData.EnqueueRoomLogData(roomLogData);
-                player.RunLogData.RunLogSum.Plus(roomLogData.RoomLogSum);
+                player.RunLogData.RunLogSum.Add(roomLogData.RoomLogSum);
             }
         }
 
         LogState.Instance.OnCombatEnd();
     }
 
-    private void SaveLogState(IRunState? runState, CombatState? combatState)
+    private void SaveLogState(IRunState runState, CombatState combatState)
     {
         ModSaveUtils.Save(runState, combatState);
     }
@@ -153,7 +149,7 @@ public class AttackLogCombatService : IAttackLogService
             if (turnLogData != null)
             {
                 roomLogData?.EnqueueTurnLogData(turnLogData);
-                roomLogData?.RoomLogSum.Plus(turnLogData.TurnLogSum);
+                roomLogData?.RoomLogSum.Add(turnLogData.TurnLogSum);
             }
         }
 

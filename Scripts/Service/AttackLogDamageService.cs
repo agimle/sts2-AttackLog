@@ -13,33 +13,30 @@ public class AttackLogDamageService : IAttackLogService
 {
     public void Subscribe()
     {
-        AttackLogEventBus.Subscribe(AttackLogEventType.AfterDamageGiven, OnAfterDamageGiven);
-        AttackLogEventBus.Subscribe(AttackLogEventType.AfterDeath, OnAfterDeath);
-        AttackLogEventBus.Subscribe(AttackLogEventType.DoomKill, OnDoomKill);
+        AttackLogEventBus.Subscribe<AfterDamageGivenEvent>(OnAfterDamageGiven);
+        AttackLogEventBus.Subscribe<AfterDeathEvent>(OnAfterDeath);
+        AttackLogEventBus.Subscribe<DoomKillEvent>(OnDoomKill);
     }
 
     public void Unsubscribe()
     {
-        AttackLogEventBus.Unsubscribe(AttackLogEventType.AfterDamageGiven, OnAfterDamageGiven);
-        AttackLogEventBus.Unsubscribe(AttackLogEventType.AfterDeath, OnAfterDeath);
-        AttackLogEventBus.Unsubscribe(AttackLogEventType.DoomKill, OnDoomKill);
+        AttackLogEventBus.Unsubscribe<AfterDamageGivenEvent>(OnAfterDamageGiven);
+        AttackLogEventBus.Unsubscribe<AfterDeathEvent>(OnAfterDeath);
+        AttackLogEventBus.Unsubscribe<DoomKillEvent>(OnDoomKill);
     }
 
-    private void OnAfterDamageGiven(IAttackLogEvent e)
+    private void OnAfterDamageGiven(AfterDamageGivenEvent evt)
     {
-        var evt = (AfterDamageGivenEvent)e;
         HandleDamageGiven(evt.Dealer, evt.Result, evt.Target, evt.CardSource);
     }
 
-    private void OnAfterDeath(IAttackLogEvent e)
+    private void OnAfterDeath(AfterDeathEvent evt)
     {
-        var evt = (AfterDeathEvent)e;
         ClearMonsterPower(evt.Creature);
     }
 
-    private void OnDoomKill(IAttackLogEvent e)
+    private void OnDoomKill(DoomKillEvent evt)
     {
-        var evt = (DoomKillEvent)e;
         HandleDoomKill(evt.Creatures);
     }
 
@@ -93,7 +90,7 @@ public class AttackLogDamageService : IAttackLogService
         LogState.Instance.TurnLogsData.TryGetValue(player.PlayerInfo, out var turnLogData);
 
         turnLogData?.EnqueueAttackLogData(newAttackLog);
-        turnLogData?.TurnLogSum.Plus(newAttackLog);
+        turnLogData?.TurnLogSum.Add(newAttackLog);
 
         LogState.Instance.InvalidateCache();
     }
@@ -121,7 +118,7 @@ public class AttackLogDamageService : IAttackLogService
             LogState.Instance.TurnLogsData.TryGetValue(player.PlayerInfo, out var turnLogData);
 
             turnLogData?.EnqueueAttackLogData(newAttackLog);
-            turnLogData?.TurnLogSum.Plus(newAttackLog);
+            turnLogData?.TurnLogSum.Add(newAttackLog);
 
             LogState.Instance.InvalidateCache();
         }
@@ -165,7 +162,7 @@ public class AttackLogDamageService : IAttackLogService
                 LogState.Instance.TurnLogsData.TryGetValue(player.PlayerInfo, out var turnLogData);
 
                 turnLogData?.EnqueueAttackLogData(newAttackLog);
-                turnLogData?.TurnLogSum.Plus(newAttackLog);
+                turnLogData?.TurnLogSum.Add(newAttackLog);
             }
         }
     }

@@ -11,17 +11,16 @@ public class AttackLogPowerService : IAttackLogService
 {
     public void Subscribe()
     {
-        AttackLogEventBus.Subscribe(AttackLogEventType.PowerReceived, OnPowerReceived);
+        AttackLogEventBus.Subscribe<PowerReceivedEvent>(OnPowerReceived);
     }
 
     public void Unsubscribe()
     {
-        AttackLogEventBus.Unsubscribe(AttackLogEventType.PowerReceived, OnPowerReceived);
+        AttackLogEventBus.Unsubscribe<PowerReceivedEvent>(OnPowerReceived);
     }
 
-    private void OnPowerReceived(IAttackLogEvent e)
+    private void OnPowerReceived(PowerReceivedEvent evt)
     {
-        var evt = (PowerReceivedEvent)e;
         AddPowerRecordToCombatRecord(evt.CombatState, evt.Power, evt.Amount, evt.Applier);
     }
 

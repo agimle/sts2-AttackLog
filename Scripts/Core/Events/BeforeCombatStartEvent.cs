@@ -6,6 +6,6 @@ namespace AttackLog.Core;
 public sealed class BeforeCombatStartEvent : IAttackLogEvent
 {
     public AttackLogEventType Type => AttackLogEventType.BeforeCombatStart;
-    public IRunState? RunState { get; init; }
-    public CombatState? CombatState { get; init; }
+    public required IRunState RunState { get; init; }
+    public required CombatState CombatState { get; init; }
 }

@@ -11,17 +11,16 @@ public class AttackLogRunService : IAttackLogService
 {
     public void Subscribe()
     {
-        AttackLogEventBus.Subscribe(AttackLogEventType.RunStarted, OnRunStarted);
+        AttackLogEventBus.Subscribe<RunStartedEvent>(OnRunStarted);
     }
 
     public void Unsubscribe()
     {
-        AttackLogEventBus.Unsubscribe(AttackLogEventType.RunStarted, OnRunStarted);
+        AttackLogEventBus.Unsubscribe<RunStartedEvent>(OnRunStarted);
     }
 
-    private void OnRunStarted(IAttackLogEvent e)
+    private void OnRunStarted(RunStartedEvent evt)
     {
-        var evt = (RunStartedEvent)e;
         CreateNewRun(evt.RunState);
         RegisterPlayers(evt.RunState);
         LoadLogState(evt.RunState);

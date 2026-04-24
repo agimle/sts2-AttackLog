@@ -62,12 +62,15 @@ public sealed partial class AttackLogPanel : CanvasLayer
     {
         Layer = 100;
         Name = nameof(AttackLogPanel);
+        _instance = this;
+        SubscribeAll();
     }
 
     public override void _ExitTree()
     {
-        if (ReferenceEquals(_instance, this)) _instance = null;
         UnsubscribeAll();
+        if (ReferenceEquals(_instance, this))
+            _instance = null;
     }
 
     public override void _Ready()
@@ -625,8 +628,6 @@ public sealed partial class AttackLogPanel : CanvasLayer
         var sceneTree = Engine.GetMainLoop() as SceneTree;
         sceneTree?.Root.AddChild(_instance);
         LogState.Instance.IsLogPanelCreated = true;
-
-        _instance.SubscribeAll();
     }
 
     public static void RefreshInstance()

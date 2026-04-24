@@ -8,9 +8,11 @@ using MegaCrit.Sts2.Core.Runs;
 
 namespace AttackLog.Service;
 
-public class AttackLogCombatService : IAttackLogService
+public class AttackLogCombatService : AttackLogServiceBase
 {
-    public void Subscribe()
+    public AttackLogCombatService(LogState state) : base(state) { }
+
+    public override void Subscribe()
     {
         AttackLogEventBus.Subscribe<BeforeCombatStartEvent>(OnBeforeCombatStart);
         AttackLogEventBus.Subscribe<AfterCombatEndEvent>(OnAfterCombatEnd);
@@ -18,7 +20,7 @@ public class AttackLogCombatService : IAttackLogService
         AttackLogEventBus.Subscribe<AfterTurnEndEvent>(OnAfterTurnEnd);
     }
 
-    public void Unsubscribe()
+    public override void Unsubscribe()
     {
         AttackLogEventBus.Unsubscribe<BeforeCombatStartEvent>(OnBeforeCombatStart);
         AttackLogEventBus.Unsubscribe<AfterCombatEndEvent>(OnAfterCombatEnd);
@@ -50,29 +52,29 @@ public class AttackLogCombatService : IAttackLogService
 
     private void CreateNewRoomLog(IRunState runState, CombatState combatState)
     {
-        if (LogState.Instance.RunLog is null) return;
-        if (!LogState.Instance.RunLog.IsSameRun(runState)) return;
+        if (State.RunLog is null) return;
+        if (!State.RunLog.IsSameRun(runState)) return;
 
-        LogState.Instance.OnCombatStart();
+        State.OnCombatStart();
 
-        foreach (var player in LogState.Instance.RunLog.GetAllPlayers())
+        foreach (var player in State.RunLog.GetAllPlayers())
         {
             SingleRoomLogData newRoomLogData = new SingleRoomLogData();
-            LogState.Instance.RoomLogsData.TryAdd(player.PlayerInfo, newRoomLogData);
+            State.RoomLogsData.TryAdd(player.PlayerInfo, newRoomLogData);
         }
 
-        LogState.Instance.InvalidateCache();
+        State.InvalidateCache();
     }
 
     private void SaveRoomLog(IRunState runState, CombatState combatState)
     {
-        if (LogState.Instance.RunLog == null) return;
-        if (!LogState.Instance.RunLog.IsSameRun(runState)) return;
+        if (State.RunLog == null) return;
+        if (!State.RunLog.IsSameRun(runState)) return;
 
-        foreach (var player in LogState.Instance.RunLog.GetAllPlayers())
+        foreach (var player in State.RunLog.GetAllPlayers())
         {
-            LogState.Instance.TurnLogsData.TryGetValue(player.PlayerInfo, out var turnLogData);
-            LogState.Instance.RoomLogsData.TryGetValue(player.PlayerInfo, out var roomLogData);
+            State.TurnLogsData.TryGetValue(player.PlayerInfo, out var turnLogData);
+            State.RoomLogsData.TryGetValue(player.PlayerInfo, out var roomLogData);
             if (turnLogData != null && roomLogData != null)
             {
                 roomLogData.EnqueueTurnLogData(turnLogData);
@@ -86,7 +88,7 @@ public class AttackLogCombatService : IAttackLogService
             }
         }
 
-        LogState.Instance.OnCombatEnd();
+        State.OnCombatEnd();
     }
 
     private void SaveLogState(IRunState runState, CombatState combatState)
@@ -97,25 +99,25 @@ public class AttackLogCombatService : IAttackLogService
     private void CreateNewTurnLog(CombatState combatState, CombatSide side)
     {
         if (side != CombatSide.Player) return;
-        if (LogState.Instance.RunLog is null) return;
-        if (!LogState.Instance.RunLog.IsSameRun(combatState.RunState)) return;
+        if (State.RunLog is null) return;
+        if (!State.RunLog.IsSameRun(combatState.RunState)) return;
 
-        LogState.Instance.TurnLogsData.Clear();
+        State.TurnLogsData.Clear();
 
-        foreach (var player in LogState.Instance.RunLog.GetAllPlayers())
+        foreach (var player in State.RunLog.GetAllPlayers())
         {
             SingleTurnLogData newTurnLogData = new SingleTurnLogData();
-            LogState.Instance.TurnLogsData.TryAdd(player.PlayerInfo, newTurnLogData);
+            State.TurnLogsData.TryAdd(player.PlayerInfo, newTurnLogData);
         }
 
-        LogState.Instance.InvalidateCache();
+        State.InvalidateCache();
     }
 
     private void UpdatePoisonPower(CombatState combatState, CombatSide side)
     {
         if (side != CombatSide.Player) return;
 
-        foreach (var monsterRecord in LogState.Instance.CombatRecord.MonsterRecords)
+        foreach (var monsterRecord in State.CombatRecord.MonsterRecords)
         {
             foreach (var powerRecord in monsterRecord.Powers)
             {
@@ -138,13 +140,13 @@ public class AttackLogCombatService : IAttackLogService
     {
         if (side == CombatSide.Player) return;
 
-        if (LogState.Instance.RunLog == null) return;
-        if (!LogState.Instance.RunLog.IsSameRun(combatState.RunState)) return;
+        if (State.RunLog == null) return;
+        if (!State.RunLog.IsSameRun(combatState.RunState)) return;
 
-        foreach (var player in LogState.Instance.RunLog.GetAllPlayers())
+        foreach (var player in State.RunLog.GetAllPlayers())
         {
-            LogState.Instance.TurnLogsData.TryGetValue(player.PlayerInfo, out var turnLogData);
-            LogState.Instance.RoomLogsData.TryGetValue(player.PlayerInfo, out var roomLogData);
+            State.TurnLogsData.TryGetValue(player.PlayerInfo, out var turnLogData);
+            State.RoomLogsData.TryGetValue(player.PlayerInfo, out var roomLogData);
 
             if (turnLogData != null)
             {
@@ -153,7 +155,7 @@ public class AttackLogCombatService : IAttackLogService
             }
         }
 
-        LogState.Instance.TurnLogsData.Clear();
-        LogState.Instance.InvalidateCache();
+        State.TurnLogsData.Clear();
+        State.InvalidateCache();
     }
 }

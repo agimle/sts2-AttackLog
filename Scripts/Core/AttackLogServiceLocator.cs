@@ -1,4 +1,5 @@
 using AttackLog.Service;
+using AttackLog.State;
 
 namespace AttackLog.Core;
 
@@ -11,10 +12,12 @@ public static class AttackLogServiceLocator
     {
         if (_initialized) return;
 
-        var combatService = new AttackLogCombatService();
-        var damageService = new AttackLogDamageService();
-        var powerService = new AttackLogPowerService();
-        var runService = new AttackLogRunService();
+        var logState = LogState.Instance;
+
+        var combatService = new AttackLogCombatService(logState);
+        var damageService = new AttackLogDamageService(logState);
+        var powerService = new AttackLogPowerService(logState);
+        var runService = new AttackLogRunService(logState);
 
         _services[typeof(AttackLogCombatService)] = combatService;
         _services[typeof(AttackLogDamageService)] = damageService;

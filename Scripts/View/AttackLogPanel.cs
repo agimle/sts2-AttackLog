@@ -2,7 +2,6 @@ using Godot;
 using AttackLog.Core;
 using AttackLog.Model;
 using AttackLog.State;
-using AttackLog.Utils;
 using MegaCrit.Sts2.Core.Runs;
 
 namespace AttackLog.View;
@@ -11,15 +10,6 @@ public sealed partial class AttackLogPanel : CanvasLayer
 {
     private const float PanelWidth = 460f;
     private const float RefreshInterval = 0.1f;
-
-    private static readonly Color White = new("FFFFFF");
-    private static readonly Color Gray = new("A0A8B4");
-    private static readonly Color BgDark = new("000000B0");
-    private static readonly Color Border = new("3A3A5C");
-    private static readonly Color PercentColor = new("EC4899");
-    private static readonly Color TotalColor = new("F59E0B");
-    private static readonly Color RoomColor = new("10B981");
-    private static readonly Color TurnColor = new("6366F1");
 
     private static readonly AttackLogEventType[] RefreshOnEvents =
     {
@@ -41,17 +31,21 @@ public sealed partial class AttackLogPanel : CanvasLayer
     private PanelContainer? _root;
     private VBoxContainer? _playerList;
     private Label? _emptyLabel;
+    private Button? _sortButton;
 
     private Dictionary<PlayerInfo, PanelContainer> _playerRows = new();
     private float _lastRefreshTime = 0f;
     private bool _refreshRequested = false;
 
-    private bool _isDragging = false;
-    private Vector2 _dragOffset = Vector2.Zero;
+    private PanelDragHandler _dragHandler = new();
+    private PanelSortController _sortController;
+    private PlayerRowFactory _rowFactory;
 
-    private enum SortMode { Total, Room }
-    private SortMode _sortMode = SortMode.Total;
-    private Button? _sortButton;
+    public AttackLogPanel()
+    {
+        _sortController = new PanelSortController(LogState.Instance);
+        _rowFactory = new PlayerRowFactory(_dataProvider);
+    }
 
     public static void SetDataProvider(ILogDataProvider provider)
     {
@@ -82,12 +76,6 @@ public sealed partial class AttackLogPanel : CanvasLayer
 
     public override void _Process(double delta)
     {
-        if (_isDragging && _root != null)
-        {
-            var newPos = _root.GetGlobalMousePosition() - _dragOffset;
-            _root.Position = ClampToScreen(newPos, _root.Size);
-        }
-
         if (_refreshRequested)
         {
             float currentTime = Time.GetTicksMsec() / 1000f;
@@ -145,19 +133,7 @@ public sealed partial class AttackLogPanel : CanvasLayer
             SizeFlagsVertical = Control.SizeFlags.ShrinkBegin
         };
 
-        _root.AddThemeStyleboxOverride("panel", new StyleBoxFlat
-        {
-            BgColor = BgDark,
-            BorderColor = Border,
-            BorderWidthLeft = 1,
-            BorderWidthTop = 1,
-            BorderWidthRight = 1,
-            BorderWidthBottom = 1,
-            CornerRadiusTopLeft = 8,
-            CornerRadiusTopRight = 8,
-            CornerRadiusBottomLeft = 8,
-            CornerRadiusBottomRight = 8
-        });
+        _root.AddThemeStyleboxOverride("panel", PanelTheme.CreateRootStyle());
 
         var margin = new MarginContainer();
         margin.SetAnchorsPreset(Control.LayoutPreset.FullRect);
@@ -172,7 +148,7 @@ public sealed partial class AttackLogPanel : CanvasLayer
         var titleBar = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         titleBar.AddThemeConstantOverride("separation", 6);
 
-        var title = MakeLabel("⚔ 战斗统计", 16, White, true);
+        var title = PanelTheme.MakeLabel("⚔ 战斗统计", 16, PanelTheme.White);
         title.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         title.HorizontalAlignment = HorizontalAlignment.Left;
         titleBar.AddChild(title);
@@ -185,9 +161,7 @@ public sealed partial class AttackLogPanel : CanvasLayer
             MouseFilter = Control.MouseFilterEnum.Stop
         };
         _sortButton.AddThemeFontSizeOverride("font_size", 11);
-        _sortButton.AddThemeColorOverride("font_color", TotalColor);
-        _sortButton.AddThemeColorOverride("font_hover_color", TotalColor);
-        _sortButton.AddThemeColorOverride("font_pressed_color", TotalColor);
+        ApplySortButtonColors(PanelTheme.TotalColor);
         var btnEmptyStyle = new StyleBoxEmpty();
         _sortButton.AddThemeStyleboxOverride("normal", btnEmptyStyle);
         _sortButton.AddThemeStyleboxOverride("hover", btnEmptyStyle);
@@ -198,24 +172,24 @@ public sealed partial class AttackLogPanel : CanvasLayer
 
         col.AddChild(titleBar);
 
-        var separator = HLine(1, Border);
+        var separator = HLine(1, PanelTheme.Border);
         col.AddChild(separator);
 
         var headerMargin = new MarginContainer();
         headerMargin.AddThemeConstantOverride("margin_left", 8);
         headerMargin.AddThemeConstantOverride("margin_right", 8);
-        var headerRow = BuildHeaderRow();
+        var headerRow = PlayerRowFactory.BuildHeaderRow();
         headerMargin.AddChild(headerRow);
         col.AddChild(headerMargin);
 
-        var separator2 = HLine(1, Border);
+        var separator2 = HLine(1, PanelTheme.Border);
         col.AddChild(separator2);
 
         _playerList = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         _playerList.AddThemeConstantOverride("separation", 6);
         col.AddChild(_playerList);
 
-        _emptyLabel = MakeLabel("No players registered", 12, Gray);
+        _emptyLabel = PanelTheme.MakeLabel("No players registered", 12, PanelTheme.Gray);
         _emptyLabel.HorizontalAlignment = HorizontalAlignment.Center;
         col.AddChild(_emptyLabel);
 
@@ -257,26 +231,15 @@ public sealed partial class AttackLogPanel : CanvasLayer
 
     private void OnRootGuiInput(InputEvent @event)
     {
-        if (@event is InputEventMouseButton mb)
+        if (_root != null)
         {
-            if (mb.ButtonIndex == MouseButton.Left)
-            {
-                if (mb.Pressed)
-                {
-                    _isDragging = true;
-                    _dragOffset = _root!.GetGlobalMousePosition() - _root.Position;
-                }
-                else
-                {
-                    _isDragging = false;
-                }
-            }
+            _dragHandler.HandleInput(@event, _root);
         }
     }
 
     private void OnSortToggled()
     {
-        _sortMode = _sortMode == SortMode.Total ? SortMode.Room : SortMode.Total;
+        _sortController.Toggle();
         UpdateSortButton();
         ClearAllRows();
         ResetRootSize();
@@ -286,8 +249,14 @@ public sealed partial class AttackLogPanel : CanvasLayer
     private void UpdateSortButton()
     {
         if (_sortButton == null) return;
-        _sortButton.Text = _sortMode == SortMode.Total ? "▼ 总计" : "▼ 房间";
-        var color = _sortMode == SortMode.Total ? TotalColor : RoomColor;
+        bool isTotal = _sortController.SortByTotal;
+        _sortButton.Text = isTotal ? "▼ 总计" : "▼ 房间";
+        ApplySortButtonColors(isTotal ? PanelTheme.TotalColor : PanelTheme.RoomColor);
+    }
+
+    private void ApplySortButtonColors(Color color)
+    {
+        if (_sortButton == null) return;
         _sortButton.AddThemeColorOverride("font_color", color);
         _sortButton.AddThemeColorOverride("font_hover_color", color);
         _sortButton.AddThemeColorOverride("font_pressed_color", color);
@@ -318,11 +287,12 @@ public sealed partial class AttackLogPanel : CanvasLayer
             return;
         }
 
-        players = SortPlayers(players);
+        var sorted = _sortController.GetSortedPlayers();
+        var sortedPlayerData = SortPlayerDataByInfo(players, sorted);
 
         _emptyLabel.Visible = false;
 
-        var currentPlayerInfos = new HashSet<PlayerInfo>(players.Select(p => p.PlayerInfo));
+        var currentPlayerInfos = new HashSet<PlayerInfo>(sortedPlayerData.Select(p => p.PlayerInfo));
 
         var toRemove = _playerRows.Keys
             .Where(info => !currentPlayerInfos.Contains(info))
@@ -339,36 +309,30 @@ public sealed partial class AttackLogPanel : CanvasLayer
         }
 
         int index = 0;
-        foreach (var playerData in players)
+        foreach (var playerData in sortedPlayerData)
         {
             if (_playerRows.TryGetValue(playerData.PlayerInfo, out var existingRow))
             {
-                UpdatePlayerRow(existingRow, playerData, index);
+                _rowFactory.UpdateRow(existingRow, playerData);
             }
             else
             {
-                var newRow = BuildPlayerRow(playerData, index);
+                var newRow = _rowFactory.BuildRow(playerData);
                 _playerList.AddChild(newRow);
                 _playerRows[playerData.PlayerInfo] = newRow;
             }
             index++;
         }
 
-        ReorderPlayerRows(players);
+        ReorderPlayerRows(sortedPlayerData);
 
         ResetRootSize();
     }
 
-    private List<PlayerData> SortPlayers(List<PlayerData> players)
+    private List<PlayerData> SortPlayerDataByInfo(List<PlayerData> players, List<KeyValuePair<PlayerInfo, CachedPlayerStats>> sortedInfos)
     {
-        return players.OrderByDescending(p =>
-        {
-            var stats = _dataProvider.GetPlayerStats(p.PlayerInfo);
-            if (stats == null) return 0f;
-            return _sortMode == SortMode.Total
-                ? stats.RunLog?.RealDamageDealt ?? 0
-                : stats.RoomLog?.RealDamageDealt ?? 0;
-        }).ToList();
+        var infoOrder = sortedInfos.Select((kv, i) => (kv.Key, i)).ToDictionary(x => x.Key, x => x.i);
+        return players.OrderBy(p => infoOrder.TryGetValue(p.PlayerInfo, out var idx) ? idx : int.MaxValue).ToList();
     }
 
     private void ReorderPlayerRows(List<PlayerData> sortedPlayers)
@@ -397,218 +361,6 @@ public sealed partial class AttackLogPanel : CanvasLayer
     {
         if (_root == null) return;
         _root.ResetSize();
-    }
-
-    private static HBoxContainer BuildHeaderRow()
-    {
-        var row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        row.AddThemeConstantOverride("separation", 8);
-
-        var iconPlaceholder = new Control
-        {
-            CustomMinimumSize = new Vector2(24, 24)
-        };
-        row.AddChild(iconPlaceholder);
-
-        var playerHeader = MakeLabel("玩家", 11, Gray);
-        playerHeader.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        playerHeader.HorizontalAlignment = HorizontalAlignment.Left;
-        row.AddChild(playerHeader);
-
-        var percentHeader = MakeLabel("占比", 11, PercentColor);
-        percentHeader.CustomMinimumSize = new Vector2(60, 0);
-        percentHeader.HorizontalAlignment = HorizontalAlignment.Right;
-        row.AddChild(percentHeader);
-
-        var totalHeader = MakeLabel("总计", 11, TotalColor);
-        totalHeader.CustomMinimumSize = new Vector2(60, 0);
-        totalHeader.HorizontalAlignment = HorizontalAlignment.Right;
-        row.AddChild(totalHeader);
-
-        var roomHeader = MakeLabel("房间", 11, RoomColor);
-        roomHeader.CustomMinimumSize = new Vector2(60, 0);
-        roomHeader.HorizontalAlignment = HorizontalAlignment.Right;
-        row.AddChild(roomHeader);
-
-        var turnHeader = MakeLabel("回合", 11, TurnColor);
-        turnHeader.CustomMinimumSize = new Vector2(60, 0);
-        turnHeader.HorizontalAlignment = HorizontalAlignment.Right;
-        row.AddChild(turnHeader);
-
-        return row;
-    }
-
-    private static PanelContainer BuildPlayerRow(PlayerData playerData, int rowIndex)
-    {
-        var card = new PanelContainer
-        {
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
-        };
-
-        var baseColor = playerData.PlayerInfo.NameColor;
-        var borderColor = DarkenColor(baseColor, 0.3f);
-        var bgColor = new Color(baseColor.R, baseColor.G, baseColor.B, 0.15f);
-
-        card.AddThemeStyleboxOverride("panel", new StyleBoxFlat
-        {
-            BgColor = bgColor,
-            BorderColor = borderColor,
-            BorderWidthLeft = 1,
-            BorderWidthTop = 1,
-            BorderWidthRight = 1,
-            BorderWidthBottom = 1,
-            CornerRadiusTopLeft = 4,
-            CornerRadiusTopRight = 4,
-            CornerRadiusBottomLeft = 4,
-            CornerRadiusBottomRight = 4,
-            ContentMarginLeft = 8,
-            ContentMarginRight = 8,
-            ContentMarginTop = 4,
-            ContentMarginBottom = 4
-        });
-
-        var row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        row.AddThemeConstantOverride("separation", 8);
-
-        var iconTexture = playerData.PlayerInfo.IconTexture;
-        if (iconTexture != null)
-        {
-            var icon = new TextureRect
-            {
-                Texture = iconTexture,
-                CustomMinimumSize = new Vector2(24, 24),
-                StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize
-            };
-            row.AddChild(icon);
-        }
-
-        var name = playerData.PlayerInfo.PlayerName + " [" + playerData.PlayerInfo.Title.GetFormattedText() + "]";
-        var nameLabel = MakeLabel(name, 14, baseColor);
-        nameLabel.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        row.AddChild(nameLabel);
-
-        var stats = _dataProvider.GetPlayerStats(playerData.PlayerInfo) ?? new CachedPlayerStats();
-
-        var percentLabel = MakeLabel($"{stats.DamagePercent:F1}%", 14, PercentColor);
-        percentLabel.CustomMinimumSize = new Vector2(60, 0);
-        percentLabel.HorizontalAlignment = HorizontalAlignment.Right;
-        row.AddChild(percentLabel);
-
-        var runDamage = stats.RunLog?.RealDamageDealt ?? 0;
-        var runDamageLabel = MakeLabel($"{runDamage}", 14, TotalColor);
-        runDamageLabel.CustomMinimumSize = new Vector2(60, 0);
-        runDamageLabel.HorizontalAlignment = HorizontalAlignment.Right;
-        row.AddChild(runDamageLabel);
-
-        var roomDamage = stats.RoomLog?.RealDamageDealt ?? 0;
-        var roomDamageLabel = MakeLabel($"{roomDamage}", 14, RoomColor);
-        roomDamageLabel.CustomMinimumSize = new Vector2(60, 0);
-        roomDamageLabel.HorizontalAlignment = HorizontalAlignment.Right;
-        row.AddChild(roomDamageLabel);
-
-        var turnDamage = stats.TurnLog?.RealDamageDealt ?? 0;
-        var turnDamageLabel = MakeLabel($"{turnDamage}", 14, TurnColor);
-        turnDamageLabel.CustomMinimumSize = new Vector2(60, 0);
-        turnDamageLabel.HorizontalAlignment = HorizontalAlignment.Right;
-        row.AddChild(turnDamageLabel);
-
-        var wrapper = new VBoxContainer
-        {
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
-        };
-        wrapper.AddThemeConstantOverride("separation", 4);
-        wrapper.AddChild(row);
-
-        float percent = Mathf.Clamp(stats.DamagePercent / 100f, 0.01f, 1f);
-
-        var barFill = new ColorRect
-        {
-            Color = new Color(baseColor.R, baseColor.G, baseColor.B, 0.7f),
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-            SizeFlagsStretchRatio = percent,
-            Name = "BarFill",
-            MouseFilter = Control.MouseFilterEnum.Ignore
-        };
-
-        var barEmpty = new Control
-        {
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-            SizeFlagsStretchRatio = 1f - percent,
-            MouseFilter = Control.MouseFilterEnum.Ignore
-        };
-
-        var barTrack = new HBoxContainer
-        {
-            CustomMinimumSize = new Vector2(0, 4),
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-            MouseFilter = Control.MouseFilterEnum.Ignore
-        };
-        barTrack.AddChild(barFill);
-        barTrack.AddChild(barEmpty);
-        wrapper.AddChild(barTrack);
-
-        card.AddChild(wrapper);
-        return card;
-    }
-
-    private static void UpdatePlayerRow(PanelContainer card, PlayerData playerData, int rowIndex)
-    {
-        var wrapper = card.GetChild(0) as VBoxContainer;
-        if (wrapper == null) return;
-
-        var row = wrapper.GetChild(0) as HBoxContainer;
-        if (row == null) return;
-
-        var labels = row.GetChildren().OfType<Label>().ToList();
-        if (labels.Count < 5) return;
-
-        var stats = _dataProvider.GetPlayerStats(playerData.PlayerInfo);
-        if (stats == null) return;
-
-        labels[1].Text = $"{stats.DamagePercent:F1}%";
-        labels[2].Text = $"{stats.RunLog?.RealDamageDealt ?? 0}";
-        labels[3].Text = $"{stats.RoomLog?.RealDamageDealt ?? 0}";
-        labels[4].Text = $"{stats.TurnLog?.RealDamageDealt ?? 0}";
-
-        var barTrack = wrapper.GetChild<HBoxContainer>(1);
-        if (barTrack == null) return;
-
-        float percent = Mathf.Clamp(stats.DamagePercent / 100f, 0.01f, 1f);
-
-        var barFill = barTrack.GetChild<ColorRect>(0);
-        if (barFill != null)
-        {
-            barFill.SizeFlagsStretchRatio = percent;
-        }
-
-        var barEmpty = barTrack.GetChild<Control>(1);
-        if (barEmpty != null)
-        {
-            barEmpty.SizeFlagsStretchRatio = 1f - percent;
-        }
-    }
-
-    private static Color DarkenColor(Color color, float amount)
-    {
-        return new Color(
-            Math.Max(0, color.R - amount),
-            Math.Max(0, color.G - amount),
-            Math.Max(0, color.B - amount),
-            color.A
-        );
-    }
-
-    private static Label MakeLabel(string text, int fontSize, Color color, bool bold = false)
-    {
-        var label = new Label
-        {
-            Text = text,
-            HorizontalAlignment = HorizontalAlignment.Left
-        };
-        label.AddThemeFontSizeOverride("font_size", fontSize);
-        label.AddThemeColorOverride("font_color", color);
-        return label;
     }
 
     private static Control HLine(int height, Color color)

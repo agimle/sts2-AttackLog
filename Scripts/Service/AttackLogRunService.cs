@@ -2,19 +2,20 @@ using AttackLog.Core;
 using AttackLog.Model;
 using AttackLog.Save;
 using AttackLog.State;
-using AttackLog.View;
 using MegaCrit.Sts2.Core.Runs;
 
 namespace AttackLog.Service;
 
-public class AttackLogRunService : IAttackLogService
+public class AttackLogRunService : AttackLogServiceBase
 {
-    public void Subscribe()
+    public AttackLogRunService(LogState state) : base(state) { }
+
+    public override void Subscribe()
     {
         AttackLogEventBus.Subscribe<RunStartedEvent>(OnRunStarted);
     }
 
-    public void Unsubscribe()
+    public override void Unsubscribe()
     {
         AttackLogEventBus.Unsubscribe<RunStartedEvent>(OnRunStarted);
     }
@@ -28,26 +29,26 @@ public class AttackLogRunService : IAttackLogService
 
     private void CreateNewRun(IRunState runState)
     {
-        if (LogState.Instance.RunLog is null || !LogState.Instance.RunLog.IsSameRun(runState))
+        if (State.RunLog is null || !State.RunLog.IsSameRun(runState))
         {
-            LogState.Instance.RunLog = new RunLog(runState);
-            LogState.Instance.InvalidateCache();
+            State.RunLog = new RunLog(runState);
+            State.InvalidateCache();
         }
     }
 
     private void RegisterPlayers(IRunState runState)
     {
-        if (LogState.Instance.RunLog is null || !LogState.Instance.RunLog.IsSameRun(runState))
+        if (State.RunLog is null || !State.RunLog.IsSameRun(runState))
         {
             CreateNewRun(runState);
         }
 
         foreach (var player in runState.Players)
         {
-            LogState.Instance.RunLog?.RegisterPlayer(player);
+            State.RunLog?.RegisterPlayer(player);
         }
 
-        LogState.Instance.InvalidateCache();
+        State.InvalidateCache();
     }
 
     private void LoadLogState(IRunState runState)

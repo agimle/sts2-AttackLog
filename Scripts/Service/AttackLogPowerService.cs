@@ -7,14 +7,16 @@ using MegaCrit.Sts2.Core.Models;
 
 namespace AttackLog.Service;
 
-public class AttackLogPowerService : IAttackLogService
+public class AttackLogPowerService : AttackLogServiceBase
 {
-    public void Subscribe()
+    public AttackLogPowerService(LogState state) : base(state) { }
+
+    public override void Subscribe()
     {
         AttackLogEventBus.Subscribe<PowerReceivedEvent>(OnPowerReceived);
     }
 
-    public void Unsubscribe()
+    public override void Unsubscribe()
     {
         AttackLogEventBus.Unsubscribe<PowerReceivedEvent>(OnPowerReceived);
     }
@@ -30,7 +32,7 @@ public class AttackLogPowerService : IAttackLogService
         IPowerRecord? powerRecord = TryCreatePowerRecord(combatState, power, amount, applier);
         if (powerRecord is null) return;
 
-        LogState.Instance.CombatRecord.AddPowerRecord(power.Owner, powerRecord);
+        State.CombatRecord.AddPowerRecord(power.Owner, powerRecord);
     }
 
     private static IPowerRecord? TryCreatePowerRecord(CombatState combatState, PowerModel power, decimal amount,

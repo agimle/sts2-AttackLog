@@ -9,16 +9,18 @@ using MegaCrit.Sts2.Core.Models.Powers;
 
 namespace AttackLog.Service;
 
-public class AttackLogDamageService : IAttackLogService
+public class AttackLogDamageService : AttackLogServiceBase
 {
-    public void Subscribe()
+    public AttackLogDamageService(LogState state) : base(state) { }
+
+    public override void Subscribe()
     {
         AttackLogEventBus.Subscribe<AfterDamageGivenEvent>(OnAfterDamageGiven);
         AttackLogEventBus.Subscribe<AfterDeathEvent>(OnAfterDeath);
         AttackLogEventBus.Subscribe<DoomKillEvent>(OnDoomKill);
     }
 
-    public void Unsubscribe()
+    public override void Unsubscribe()
     {
         AttackLogEventBus.Unsubscribe<AfterDamageGivenEvent>(OnAfterDamageGiven);
         AttackLogEventBus.Unsubscribe<AfterDeathEvent>(OnAfterDeath);
@@ -82,17 +84,17 @@ public class AttackLogDamageService : IAttackLogService
             return;
         }
 
-        if (LogState.Instance.RunLog is null) return;
+        if (State.RunLog is null) return;
         if (dealer == null) return;
 
-        PlayerData? player = LogState.Instance.RunLog.GetPlayerByCreature(dealer);
+        PlayerData? player = State.RunLog.GetPlayerByCreature(dealer);
         if (player == null) return;
-        LogState.Instance.TurnLogsData.TryGetValue(player.PlayerInfo, out var turnLogData);
+        State.TurnLogsData.TryGetValue(player.PlayerInfo, out var turnLogData);
 
         turnLogData?.EnqueueAttackLogData(newAttackLog);
         turnLogData?.TurnLogSum.Add(newAttackLog);
 
-        LogState.Instance.InvalidateCache();
+        State.InvalidateCache();
     }
 
     private void HandlePoisonDamage(Creature? dealer, DamageResult result, Creature target,
@@ -101,7 +103,7 @@ public class AttackLogDamageService : IAttackLogService
         if (dealer != null || cardSource != null) return;
         if (!target.IsEnemy) return;
 
-        MonsterRecord? monsterRecord = LogState.Instance.CombatRecord.GetMonsterRecord(target);
+        MonsterRecord? monsterRecord = State.CombatRecord.GetMonsterRecord(target);
         if (monsterRecord == null) return;
 
         Queue<IPowerRecord>? powerRecords = monsterRecord.GetPowerQueue(typeof(PoisonPower));
@@ -113,14 +115,14 @@ public class AttackLogDamageService : IAttackLogService
 
         foreach ((Creature playerCreature, AttackLogModel newAttackLog) in playersDamageDict)
         {
-            PlayerData? player = LogState.Instance.RunLog?.GetPlayerByCreature(playerCreature);
+            PlayerData? player = State.RunLog?.GetPlayerByCreature(playerCreature);
             if (player == null) return;
-            LogState.Instance.TurnLogsData.TryGetValue(player.PlayerInfo, out var turnLogData);
+            State.TurnLogsData.TryGetValue(player.PlayerInfo, out var turnLogData);
 
             turnLogData?.EnqueueAttackLogData(newAttackLog);
             turnLogData?.TurnLogSum.Add(newAttackLog);
 
-            LogState.Instance.InvalidateCache();
+            State.InvalidateCache();
         }
     }
 
@@ -128,7 +130,7 @@ public class AttackLogDamageService : IAttackLogService
     {
         if (!creature.IsEnemy) return;
 
-        LogState.Instance.CombatRecord.RemoveMonsterRecord(creature);
+        State.CombatRecord.RemoveMonsterRecord(creature);
     }
 
     private void HandleDoomKill(IReadOnlyList<Creature> creatures)
@@ -137,7 +139,7 @@ public class AttackLogDamageService : IAttackLogService
 
         foreach (var creature in creatures)
         {
-            MonsterRecord? monsterRecord = LogState.Instance.CombatRecord.GetMonsterRecord(creature);
+            MonsterRecord? monsterRecord = State.CombatRecord.GetMonsterRecord(creature);
 
             if (monsterRecord == null) continue;
 
@@ -157,9 +159,9 @@ public class AttackLogDamageService : IAttackLogService
 
             foreach ((Creature playerCreature, AttackLogModel newAttackLog) in playersDamageDict)
             {
-                PlayerData? player = LogState.Instance.RunLog?.GetPlayerByCreature(playerCreature);
+                PlayerData? player = State.RunLog?.GetPlayerByCreature(playerCreature);
                 if (player == null) continue;
-                LogState.Instance.TurnLogsData.TryGetValue(player.PlayerInfo, out var turnLogData);
+                State.TurnLogsData.TryGetValue(player.PlayerInfo, out var turnLogData);
 
                 turnLogData?.EnqueueAttackLogData(newAttackLog);
                 turnLogData?.TurnLogSum.Add(newAttackLog);

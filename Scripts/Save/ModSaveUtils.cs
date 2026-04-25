@@ -7,8 +7,16 @@ using MegaCrit.Sts2.Core.Runs;
 
 namespace AttackLog.Save;
 
+/// <summary>
+/// 存档工具类，负责 Mod 存档的加载与保存。
+/// 加载时校验种子一致性，不一致则重建存档；保存时同步运行数据到存档
+/// </summary>
 public static class ModSaveUtils
 {
+    /// <summary>
+    /// 从磁盘加载存档。若文件不存在或种子不匹配，则创建新存档
+    /// </summary>
+    /// <param name="runState">当前 Run 状态，用于种子校验和新存档初始化</param>
     public static void Load(IRunState runState)
     {
         if (!File.Exists(ModSaveConfig.SavePath))
@@ -41,6 +49,11 @@ public static class ModSaveUtils
         }
     }
 
+    /// <summary>
+    /// 将当前运行数据保存到磁盘。仅在种子匹配时执行保存
+    /// </summary>
+    /// <param name="runState">当前 Run 状态</param>
+    /// <param name="combatState">当前战斗状态</param>
     public static void Save(IRunState? runState, CombatState? combatState)
     {
         if (LogState.Instance.ModSave == null) return;
@@ -60,7 +73,7 @@ public static class ModSaveUtils
     }
 
     /// <summary>
-    /// 把存档数据传入mod运行数据
+    /// 把存档数据传入 mod 运行数据（加载存档后恢复玩家统计）
     /// </summary>
     private static void InputData()
     {
@@ -74,7 +87,7 @@ public static class ModSaveUtils
     }
 
     /// <summary>
-    /// 把mod运行数据传入存档数据
+    /// 把 mod 运行数据传入存档数据（保存前同步最新统计）
     /// </summary>
     private static void OutputData()
     {

@@ -4,8 +4,13 @@ using Godot;
 
 namespace AttackLog.View;
 
+/// <summary>
+/// 玩家行工厂，负责构建和更新面板中的玩家数据行。
+/// 每行包含：图标、名称、占比、总伤害、房间伤害、回合伤害、伤害条
+/// </summary>
 public class PlayerRowFactory
 {
+    /// <summary>数据提供者</summary>
     private readonly ILogDataProvider _dataProvider;
 
     public PlayerRowFactory(ILogDataProvider dataProvider)
@@ -13,6 +18,11 @@ public class PlayerRowFactory
         _dataProvider = dataProvider;
     }
 
+    /// <summary>
+    /// 构建新的玩家数据行
+    /// </summary>
+    /// <param name="playerData">玩家数据</param>
+    /// <returns>包含完整 UI 的 PanelContainer</returns>
     public PanelContainer BuildRow(PlayerData playerData)
     {
         var card = new PanelContainer
@@ -105,6 +115,11 @@ public class PlayerRowFactory
         return card;
     }
 
+    /// <summary>
+    /// 增量更新已有玩家行的文本和伤害条，避免重建整个 UI
+    /// </summary>
+    /// <param name="card">玩家行 PanelContainer</param>
+    /// <param name="playerData">玩家数据</param>
     public void UpdateRow(PanelContainer card, PlayerData playerData)
     {
         var wrapper = card.GetChild(0) as VBoxContainer;
@@ -142,6 +157,10 @@ public class PlayerRowFactory
         }
     }
 
+    /// <summary>
+    /// 构建表头行（图标占位、玩家、占比、总计、房间、回合）
+    /// </summary>
+    /// <returns>表头 HBoxContainer</returns>
     public static HBoxContainer BuildHeaderRow()
     {
         var row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };

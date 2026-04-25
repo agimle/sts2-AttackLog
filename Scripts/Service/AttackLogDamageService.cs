@@ -9,6 +9,13 @@ using MegaCrit.Sts2.Core.Models.Powers;
 
 namespace AttackLog.Service;
 
+/// <summary>
+/// 伤害处理服务，负责三种伤害来源的记录：
+/// 1. 直接伤害（卡牌/攻击）→ 直接归因到玩家
+/// 2. 中毒伤害（间接伤害）→ 通过 PowerDamageCalculateUtils 归因到施毒者
+/// 3. 末日击杀 → 通过 PowerDamageCalculateUtils 归因到末日施放者
+/// 同时处理怪物死亡时清理 Power 记录
+/// </summary>
 public class AttackLogDamageService : AttackLogServiceBase
 {
     public AttackLogDamageService(LogState state) : base(state) { }
@@ -27,21 +34,37 @@ public class AttackLogDamageService : AttackLogServiceBase
         AttackLogEventBus.Unsubscribe<DoomKillEvent>(OnDoomKill);
     }
 
+    /// <summary>
+    /// 伤害结算事件处理
+    /// </summary>
     private void OnAfterDamageGiven(AfterDamageGivenEvent evt)
     {
         HandleDamageGiven(evt.Dealer, evt.Result, evt.Target, evt.CardSource);
     }
 
+    /// <summary>
+    /// 生物死亡事件处理：清理怪物 Power 记录
+    /// </summary>
     private void OnAfterDeath(AfterDeathEvent evt)
     {
         ClearMonsterPower(evt.Creature);
     }
 
+    /// <summary>
+    /// 末日击杀事件处理：归因末日伤害
+    /// </summary>
     private void OnDoomKill(DoomKillEvent evt)
     {
         HandleDoomKill(evt.Creatures);
     }
 
+    /// <summary>
+    /// 处理伤害结算，区分直接伤害和间接伤害（中毒等）
+    /// </summary>
+    /// <param name="dealer">伤害来源</param>
+    /// <param name="result">伤害结果</param>
+    /// <param name="target">受伤目标</param>
+    /// <param name="cardSource">卡牌来源</param>
     private void HandleDamageGiven(Creature? dealer, DamageResult result, Creature target, CardModel? cardSource)
     {
         if (dealer == null)
@@ -97,6 +120,13 @@ public class AttackLogDamageService : AttackLogServiceBase
         State.InvalidateCache();
     }
 
+    /// <summary>
+    /// 处理中毒等间接伤害，通过 PowerDamageCalculateUtils 按施加顺序归因到施毒者
+    /// </summary>
+    /// <param name="dealer">伤害来源（中毒时为 null）</param>
+    /// <param name="result">伤害结果</param>
+    /// <param name="target">受伤目标</param>
+    /// <param name="cardSource">卡牌来源</param>
     private void HandlePoisonDamage(Creature? dealer, DamageResult result, Creature target,
         CardModel? cardSource)
     {
@@ -126,6 +156,10 @@ public class AttackLogDamageService : AttackLogServiceBase
         }
     }
 
+    /// <summary>
+    /// 清理怪物死亡后的 Power 记录
+    /// </summary>
+    /// <param name="creature">死亡的生物</param>
     private void ClearMonsterPower(Creature creature)
     {
         if (!creature.IsEnemy) return;
@@ -133,6 +167,10 @@ public class AttackLogDamageService : AttackLogServiceBase
         State.CombatRecord.RemoveMonsterRecord(creature);
     }
 
+    /// <summary>
+    /// 处理末日击杀，将怪物的剩余血量归因到末日 Power 的施放者
+    /// </summary>
+    /// <param name="creatures">被末日击杀的生物列表</param>
     private void HandleDoomKill(IReadOnlyList<Creature> creatures)
     {
         if (creatures.Count == 0) return;

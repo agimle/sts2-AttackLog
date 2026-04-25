@@ -6,11 +6,19 @@ using MegaCrit.Sts2.Core.Runs;
 
 namespace AttackLog.View;
 
+/// <summary>
+/// 战斗统计面板，以浮动窗口形式显示各玩家的伤害统计。
+/// 订阅所有游戏事件并按节流间隔刷新 UI，支持拖拽移动、排序切换和增量更新。
+/// </summary>
 public sealed partial class AttackLogPanel : CanvasLayer
 {
+    /// <summary>面板宽度</summary>
     private const float PanelWidth = 460f;
+
+    /// <summary>刷新节流间隔（秒）</summary>
     private const float RefreshInterval = 0.1f;
 
+    /// <summary>触发面板刷新的事件类型列表</summary>
     private static readonly AttackLogEventType[] RefreshOnEvents =
     {
         AttackLogEventType.RunStarted,
@@ -25,33 +33,59 @@ public sealed partial class AttackLogPanel : CanvasLayer
         AttackLogEventType.RefreshRequested
     };
 
+    /// <summary>面板单例实例</summary>
     private static AttackLogPanel? _instance;
+
+    /// <summary>数据提供者，默认使用 LogDataProvider</summary>
     private static ILogDataProvider _dataProvider = LogDataProvider.Default;
 
+    /// <summary>面板根容器</summary>
     private PanelContainer? _root;
+
+    /// <summary>玩家列表容器</summary>
     private VBoxContainer? _playerList;
+
+    /// <summary>空状态提示标签</summary>
     private Label? _emptyLabel;
+
+    /// <summary>排序切换按钮</summary>
     private Button? _sortButton;
 
+    /// <summary>玩家信息 → 行 UI 的映射</summary>
     private Dictionary<PlayerInfo, PanelContainer> _playerRows = new();
+
+    /// <summary>上次刷新时间戳</summary>
     private float _lastRefreshTime = 0f;
+
+    /// <summary>是否有待刷新请求</summary>
     private bool _refreshRequested = false;
 
+    /// <summary>拖拽处理器</summary>
     private PanelDragHandler _dragHandler = new();
+
+    /// <summary>排序控制器</summary>
     private PanelSortController _sortController;
+
+    /// <summary>玩家行工厂</summary>
     private PlayerRowFactory _rowFactory;
 
+    /// <summary>构造函数，初始化排序控制器和行工厂</summary>
     public AttackLogPanel()
     {
         _sortController = new PanelSortController(LogState.Instance);
         _rowFactory = new PlayerRowFactory(_dataProvider);
     }
 
+    /// <summary>
+    /// 替换数据提供者，支持自定义实现（如测试 Mock）
+    /// </summary>
+    /// <param name="provider">新的数据提供者</param>
     public static void SetDataProvider(ILogDataProvider provider)
     {
         _dataProvider = provider ?? LogDataProvider.Default;
     }
 
+    /// <summary>进入场景树：设置层级、订阅事件</summary>
     public override void _EnterTree()
     {
         Layer = 100;
@@ -60,6 +94,7 @@ public sealed partial class AttackLogPanel : CanvasLayer
         SubscribeAll();
     }
 
+    /// <summary>退出场景树：取消订阅事件、清理单例引用</summary>
     public override void _ExitTree()
     {
         UnsubscribeAll();
@@ -67,6 +102,7 @@ public sealed partial class AttackLogPanel : CanvasLayer
             _instance = null;
     }
 
+    /// <summary>初始化：构建 UI、设置位置、首次刷新</summary>
     public override void _Ready()
     {
         BuildUi();
@@ -74,6 +110,7 @@ public sealed partial class AttackLogPanel : CanvasLayer
         Refresh();
     }
 
+    /// <summary>每帧处理：节流刷新 UI</summary>
     public override void _Process(double delta)
     {
         if (_refreshRequested)
@@ -88,11 +125,17 @@ public sealed partial class AttackLogPanel : CanvasLayer
         }
     }
 
+    /// <summary>
+    /// 游戏事件回调，请求刷新面板
+    /// </summary>
     private void OnGameEvent(IAttackLogEvent e)
     {
         RequestRefresh();
     }
 
+    /// <summary>
+    /// 请求刷新面板，实现节流机制：超过间隔立即刷新，否则标记待刷新
+    /// </summary>
     private void RequestRefresh()
     {
         float currentTime = Time.GetTicksMsec() / 1000f;
@@ -107,6 +150,7 @@ public sealed partial class AttackLogPanel : CanvasLayer
         }
     }
 
+    /// <summary>订阅所有触发刷新的事件</summary>
     private void SubscribeAll()
     {
         foreach (var eventType in RefreshOnEvents)
@@ -115,6 +159,7 @@ public sealed partial class AttackLogPanel : CanvasLayer
         }
     }
 
+    /// <summary>取消订阅所有事件</summary>
     private void UnsubscribeAll()
     {
         foreach (var eventType in RefreshOnEvents)
@@ -123,6 +168,9 @@ public sealed partial class AttackLogPanel : CanvasLayer
         }
     }
 
+    /// <summary>
+    /// 构建面板 UI 结构：标题栏、表头、玩家列表、空状态提示
+    /// </summary>
     private void BuildUi()
     {
         _root = new PanelContainer
@@ -200,6 +248,9 @@ public sealed partial class AttackLogPanel : CanvasLayer
         _root.GuiInput += OnRootGuiInput;
     }
 
+    /// <summary>
+    /// 设置面板初始位置（屏幕右侧偏上）
+    /// </summary>
     private void SetInitialPosition()
     {
         if (_root == null) return;
@@ -212,6 +263,9 @@ public sealed partial class AttackLogPanel : CanvasLayer
         _root.Position = ClampToScreen(new Vector2(x, y), _root.Size);
     }
 
+    /// <summary>
+    /// 将面板位置限制在屏幕范围内
+    /// </summary>
     private Vector2 ClampToScreen(Vector2 pos, Vector2 panelSize)
     {
         var viewport = GetViewport();
@@ -229,6 +283,9 @@ public sealed partial class AttackLogPanel : CanvasLayer
         );
     }
 
+    /// <summary>
+    /// 根节点输入事件处理，转发给拖拽处理器
+    /// </summary>
     private void OnRootGuiInput(InputEvent @event)
     {
         if (_root != null)
@@ -237,6 +294,9 @@ public sealed partial class AttackLogPanel : CanvasLayer
         }
     }
 
+    /// <summary>
+    /// 排序切换回调，切换排序维度并刷新面板
+    /// </summary>
     private void OnSortToggled()
     {
         _sortController.Toggle();
@@ -246,6 +306,7 @@ public sealed partial class AttackLogPanel : CanvasLayer
         Refresh();
     }
 
+    /// <summary>更新排序按钮文本和颜色</summary>
     private void UpdateSortButton()
     {
         if (_sortButton == null) return;
@@ -254,6 +315,7 @@ public sealed partial class AttackLogPanel : CanvasLayer
         ApplySortButtonColors(isTotal ? PanelTheme.TotalColor : PanelTheme.RoomColor);
     }
 
+    /// <summary>应用排序按钮的主题颜色</summary>
     private void ApplySortButtonColors(Color color)
     {
         if (_sortButton == null) return;
@@ -262,6 +324,9 @@ public sealed partial class AttackLogPanel : CanvasLayer
         _sortButton.AddThemeColorOverride("font_pressed_color", color);
     }
 
+    /// <summary>
+    /// 刷新面板内容：获取玩家数据、排序、增量更新行
+    /// </summary>
     private void Refresh()
     {
         if (_playerList == null || _emptyLabel == null) return;
@@ -329,12 +394,18 @@ public sealed partial class AttackLogPanel : CanvasLayer
         ResetRootSize();
     }
 
+    /// <summary>
+    /// 按排序后的 PlayerInfo 顺序重排 PlayerData 列表
+    /// </summary>
     private List<PlayerData> SortPlayerDataByInfo(List<PlayerData> players, List<KeyValuePair<PlayerInfo, CachedPlayerStats>> sortedInfos)
     {
         var infoOrder = sortedInfos.Select((kv, i) => (kv.Key, i)).ToDictionary(x => x.Key, x => x.i);
         return players.OrderBy(p => infoOrder.TryGetValue(p.PlayerInfo, out var idx) ? idx : int.MaxValue).ToList();
     }
 
+    /// <summary>
+    /// 按排序顺序重排玩家行 UI 节点
+    /// </summary>
     private void ReorderPlayerRows(List<PlayerData> sortedPlayers)
     {
         if (_playerList == null) return;
@@ -347,6 +418,7 @@ public sealed partial class AttackLogPanel : CanvasLayer
         }
     }
 
+    /// <summary>清除所有玩家行并释放资源</summary>
     private void ClearAllRows()
     {
         foreach (var row in _playerRows.Values)
@@ -357,12 +429,14 @@ public sealed partial class AttackLogPanel : CanvasLayer
         _playerRows.Clear();
     }
 
+    /// <summary>重置根容器尺寸以适应内容</summary>
     private void ResetRootSize()
     {
         if (_root == null) return;
         _root.ResetSize();
     }
 
+    /// <summary>创建水平分隔线控件</summary>
     private static Control HLine(int height, Color color)
     {
         return new Control
@@ -372,6 +446,7 @@ public sealed partial class AttackLogPanel : CanvasLayer
         };
     }
 
+    /// <summary>确保面板已创建并添加到场景树</summary>
     public static void EnsureCreated()
     {
         if (_instance != null) return;
@@ -382,22 +457,26 @@ public sealed partial class AttackLogPanel : CanvasLayer
         LogState.Instance.IsLogPanelCreated = true;
     }
 
+    /// <summary>请求刷新面板实例</summary>
     public static void RefreshInstance()
     {
         AttackLogEventBus.Publish(new RefreshRequestedEvent());
     }
 
+    /// <summary>创建面板并刷新（外部调用入口）</summary>
     public static void CreatePanel(RunState runState)
     {
         EnsureCreated();
         RefreshInstance();
     }
 
+    /// <summary>订阅 RunStarted 事件以自动创建面板</summary>
     public static void SubscribeCreationEvent()
     {
         AttackLogEventBus.Subscribe(AttackLogEventType.RunStarted, OnRunStartedForCreation);
     }
 
+    /// <summary>RunStarted 事件回调，自动创建面板并刷新</summary>
     private static void OnRunStartedForCreation(IAttackLogEvent e)
     {
         EnsureCreated();

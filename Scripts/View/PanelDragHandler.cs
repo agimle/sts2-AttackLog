@@ -2,11 +2,22 @@ using Godot;
 
 namespace AttackLog.View;
 
+/// <summary>
+/// 面板拖拽处理器，管理面板的鼠标拖拽移动和屏幕边界限制
+/// </summary>
 public class PanelDragHandler
 {
+    /// <summary>是否正在拖拽</summary>
     private bool _dragging;
+
+    /// <summary>拖拽偏移量</summary>
     private Vector2 _dragOffset;
 
+    /// <summary>
+    /// 处理输入事件，实现面板拖拽和屏幕边界限制
+    /// </summary>
+    /// <param name="event">输入事件</param>
+    /// <param name="panel">要拖拽的面板控件</param>
     public void HandleInput(InputEvent @event, Control panel)
     {
         if (@event is InputEventMouseButton mb)
@@ -36,6 +47,9 @@ public class PanelDragHandler
         }
     }
 
+    /// <summary>
+    /// 重置拖拽状态
+    /// </summary>
     public void Reset()
     {
         _dragging = false;

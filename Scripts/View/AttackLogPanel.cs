@@ -1,6 +1,7 @@
 using Godot;
 using AttackLog.Core;
 using AttackLog.Model;
+using AttackLog.Save;
 using AttackLog.State;
 using MegaCrit.Sts2.Core.Runs;
 
@@ -14,6 +15,9 @@ public sealed partial class AttackLogPanel : CanvasLayer
 {
     /// <summary>面板宽度</summary>
     private const float PanelWidth = 460f;
+
+    /// <summary>获取面板宽度</summary>
+    public static float GetPanelWidth() => PanelWidth;
 
     /// <summary>刷新节流间隔（秒）</summary>
     private const float RefreshInterval = 0.1f;
@@ -108,6 +112,16 @@ public sealed partial class AttackLogPanel : CanvasLayer
         BuildUi();
         SetInitialPosition();
         Refresh();
+        _dragHandler.DragEnded += OnDragEnded;
+    }
+
+    /// <summary>拖拽结束回调，保存面板位置</summary>
+    private void OnDragEnded()
+    {
+        if (_root != null)
+        {
+            ModSaveUtils.SavePanelPosition(true, _root.Position.X, _root.Position.Y);
+        }
     }
 
     /// <summary>每帧处理：节流刷新 UI</summary>
@@ -204,18 +218,11 @@ public sealed partial class AttackLogPanel : CanvasLayer
         _sortButton = new Button
         {
             Text = "▼ 总计",
-            Flat = true,
-            CustomMinimumSize = new Vector2(60, 28),
-            MouseFilter = Control.MouseFilterEnum.Stop
+            CustomMinimumSize = new Vector2(65, 28)
         };
-        _sortButton.AddThemeFontSizeOverride("font_size", 11);
-        ApplySortButtonColors(PanelTheme.TotalColor);
-        var btnEmptyStyle = new StyleBoxEmpty();
-        _sortButton.AddThemeStyleboxOverride("normal", btnEmptyStyle);
-        _sortButton.AddThemeStyleboxOverride("hover", btnEmptyStyle);
-        _sortButton.AddThemeStyleboxOverride("pressed", btnEmptyStyle);
-        _sortButton.AddThemeStyleboxOverride("focus", btnEmptyStyle);
+        _sortButton.AddThemeFontSizeOverride("font_size", 13);
         _sortButton.Pressed += OnSortToggled;
+        ApplySortButtonColors(PanelTheme.TotalColor);
         titleBar.AddChild(_sortButton);
 
         col.AddChild(titleBar);
@@ -256,6 +263,13 @@ public sealed partial class AttackLogPanel : CanvasLayer
         if (_root == null) return;
         var viewport = GetViewport();
         if (viewport == null) return;
+
+        var savedPos = ModSaveUtils.GetPanelPosition(true);
+        if (savedPos.HasValue)
+        {
+            _root.Position = ClampToScreen(savedPos.Value, _root.Size);
+            return;
+        }
 
         var screenSize = viewport.GetVisibleRect().Size;
         float x = screenSize.X - PanelWidth - 16f;
@@ -322,6 +336,28 @@ public sealed partial class AttackLogPanel : CanvasLayer
         _sortButton.AddThemeColorOverride("font_color", color);
         _sortButton.AddThemeColorOverride("font_hover_color", color);
         _sortButton.AddThemeColorOverride("font_pressed_color", color);
+
+        var btnStyle = new StyleBoxFlat
+        {
+            BgColor = new Color(color.R, color.G, color.B, 0.25f),
+            BorderColor = new Color(color.R, color.G, color.B, 0.6f),
+            BorderWidthLeft = 1,
+            BorderWidthTop = 1,
+            BorderWidthRight = 1,
+            BorderWidthBottom = 1,
+            CornerRadiusTopLeft = 4,
+            CornerRadiusTopRight = 4,
+            CornerRadiusBottomLeft = 4,
+            CornerRadiusBottomRight = 4,
+            ContentMarginLeft = 8,
+            ContentMarginRight = 8,
+            ContentMarginTop = 2,
+            ContentMarginBottom = 2
+        };
+        _sortButton.AddThemeStyleboxOverride("normal", btnStyle);
+        _sortButton.AddThemeStyleboxOverride("hover", btnStyle);
+        _sortButton.AddThemeStyleboxOverride("pressed", btnStyle);
+        _sortButton.AddThemeStyleboxOverride("focus", btnStyle);
     }
 
     /// <summary>

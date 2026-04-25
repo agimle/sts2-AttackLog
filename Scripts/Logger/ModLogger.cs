@@ -25,7 +25,7 @@ public enum LogLevel
 public static class ModLogger
 {
     /// <summary>日志文件路径</summary>
-    private static readonly string LogPath = ProjectSettings.GlobalizePath("user://attack_log_debug.txt");
+    private static readonly string LogPath = ProjectSettings.GlobalizePath("user://logs/attack_log_debug.txt");
 
     /// <summary>最低输出级别</summary>
     private static LogLevel _minLevel = LogLevel.Info;

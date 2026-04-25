@@ -13,6 +13,9 @@ public class PanelDragHandler
     /// <summary>拖拽偏移量</summary>
     private Vector2 _dragOffset;
 
+    /// <summary>拖拽结束回调</summary>
+    public event Action? DragEnded;
+
     /// <summary>
     /// 处理输入事件，实现面板拖拽和屏幕边界限制
     /// </summary>
@@ -31,7 +34,11 @@ public class PanelDragHandler
                 }
                 else
                 {
-                    _dragging = false;
+                    if (_dragging)
+                    {
+                        _dragging = false;
+                        DragEnded?.Invoke();
+                    }
                 }
             }
         }

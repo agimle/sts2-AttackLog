@@ -60,6 +60,7 @@ public class ModEntry
         LoadPowerRecordFactory();
 
         AttackLogPanel.SubscribeCreationEvent();
+        DamageTypeStatsPanel.SubscribeCreationEvent();
 
         ModLogger.Clear();
         ModLogger.Log("模组初始化完成");

@@ -78,13 +78,13 @@ public class AttackLogCombatService : AttackLogServiceBase
             if (turnLogData != null && roomLogData != null)
             {
                 roomLogData.EnqueueTurnLogData(turnLogData);
-                roomLogData.RoomLogSum.Add(turnLogData.TurnLogSum);
+                roomLogData.RoomLogSum.Accumulate(turnLogData.TurnLogSum);
             }
 
             if (roomLogData != null)
             {
                 player.RunLogData.EnqueueRoomLogData(roomLogData);
-                player.RunLogData.RunLogSum.Add(roomLogData.RoomLogSum);
+                player.RunLogData.RunLogSum.Accumulate(roomLogData.RoomLogSum);
             }
         }
 
@@ -151,7 +151,7 @@ public class AttackLogCombatService : AttackLogServiceBase
             if (turnLogData != null)
             {
                 roomLogData?.EnqueueTurnLogData(turnLogData);
-                roomLogData?.RoomLogSum.Add(turnLogData.TurnLogSum);
+                roomLogData?.RoomLogSum.Accumulate(turnLogData.TurnLogSum);
             }
         }
 

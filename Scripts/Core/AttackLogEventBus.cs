@@ -20,7 +20,7 @@ public static class AttackLogEventBus
             if (e is T typed)
                 handler(typed);
             else
-                ModLogger.Log("EventBus", $"Type mismatch: expected {typeof(T).Name}, got {e.GetType().Name}");
+                ModLogger.Warning("EventBus", $"Type mismatch: expected {typeof(T).Name}, got {e.GetType().Name}");
         });
     }
 
@@ -64,7 +64,7 @@ public static class AttackLogEventBus
             }
             catch (Exception ex)
             {
-                ModLogger.Log("EventBus", $"Handler error for {evt.Type}: {ex.Message}");
+                ModLogger.Error("EventBus", $"Handler error for {evt.Type}: {ex.Message}");
             }
         }
     }

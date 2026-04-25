@@ -46,11 +46,10 @@ public class ViewCache
 
     private void RebuildCache()
     {
-        _statsCache.Clear();
-
         var runLog = _runLogProvider();
         if (runLog == null)
         {
+            _statsCache.Clear();
             _cacheValid = true;
             return;
         }
@@ -58,16 +57,25 @@ public class ViewCache
         var players = runLog.GetAllPlayers();
         if (players.Count == 0)
         {
+            _statsCache.Clear();
             _cacheValid = true;
             return;
         }
 
+        var currentPlayerInfos = new HashSet<PlayerInfo>();
         int totalDamage = 0;
 
         foreach (var player in players)
         {
-            var stats = CalculatePlayerStats(player.PlayerInfo);
-            _statsCache[player.PlayerInfo] = stats;
+            currentPlayerInfos.Add(player.PlayerInfo);
+
+            if (!_statsCache.TryGetValue(player.PlayerInfo, out var stats))
+            {
+                stats = new CachedPlayerStats();
+                _statsCache[player.PlayerInfo] = stats;
+            }
+
+            UpdatePlayerStats(stats, player.PlayerInfo);
             totalDamage += stats.RunLog?.RealDamageDealt ?? 0;
         }
 
@@ -83,18 +91,22 @@ public class ViewCache
             }
         }
 
+        var toRemove = _statsCache.Keys
+            .Where(k => !currentPlayerInfos.Contains(k))
+            .ToList();
+        foreach (var key in toRemove)
+        {
+            _statsCache.Remove(key);
+        }
+
         _cacheValid = true;
     }
 
-    private CachedPlayerStats CalculatePlayerStats(PlayerInfo info)
+    private void UpdatePlayerStats(CachedPlayerStats stats, PlayerInfo info)
     {
-        var stats = new CachedPlayerStats();
-
         stats.TurnLog = GetPlayerTurnLog(info);
         stats.RoomLog = GetPlayerRoomLog(info);
         stats.RunLog = GetPlayerRunLog(info);
-
-        return stats;
     }
 
     private AttackLogModel? GetPlayerTurnLog(PlayerInfo playerInfo)

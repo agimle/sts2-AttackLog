@@ -39,32 +39,29 @@ public class PlayerRowFactory
             row.AddChild(icon);
         }
 
-        var name = playerData.PlayerInfo.PlayerName + " [" + playerData.PlayerInfo.Title.GetFormattedText() + "]";
+        var name = playerData.PlayerInfo.DisplayName;
         var nameLabel = PanelTheme.MakeLabel(name, 14, baseColor);
         nameLabel.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         row.AddChild(nameLabel);
 
         var stats = _dataProvider.GetPlayerStats(playerData.PlayerInfo) ?? new CachedPlayerStats();
 
-        var percentLabel = PanelTheme.MakeLabel($"{stats.DamagePercent:F1}%", 14, PanelTheme.PercentColor);
+        var percentLabel = PanelTheme.MakeLabel(stats.PercentText, 14, PanelTheme.PercentColor);
         percentLabel.CustomMinimumSize = new Vector2(60, 0);
         percentLabel.HorizontalAlignment = HorizontalAlignment.Right;
         row.AddChild(percentLabel);
 
-        var runDamage = stats.RunLog?.RealDamageDealt ?? 0;
-        var runDamageLabel = PanelTheme.MakeLabel($"{runDamage}", 14, PanelTheme.TotalColor);
+        var runDamageLabel = PanelTheme.MakeLabel(stats.RunDamageText, 14, PanelTheme.TotalColor);
         runDamageLabel.CustomMinimumSize = new Vector2(60, 0);
         runDamageLabel.HorizontalAlignment = HorizontalAlignment.Right;
         row.AddChild(runDamageLabel);
 
-        var roomDamage = stats.RoomLog?.RealDamageDealt ?? 0;
-        var roomDamageLabel = PanelTheme.MakeLabel($"{roomDamage}", 14, PanelTheme.RoomColor);
+        var roomDamageLabel = PanelTheme.MakeLabel(stats.RoomDamageText, 14, PanelTheme.RoomColor);
         roomDamageLabel.CustomMinimumSize = new Vector2(60, 0);
         roomDamageLabel.HorizontalAlignment = HorizontalAlignment.Right;
         row.AddChild(roomDamageLabel);
 
-        var turnDamage = stats.TurnLog?.RealDamageDealt ?? 0;
-        var turnDamageLabel = PanelTheme.MakeLabel($"{turnDamage}", 14, PanelTheme.TurnColor);
+        var turnDamageLabel = PanelTheme.MakeLabel(stats.TurnDamageText, 14, PanelTheme.TurnColor);
         turnDamageLabel.CustomMinimumSize = new Vector2(60, 0);
         turnDamageLabel.HorizontalAlignment = HorizontalAlignment.Right;
         row.AddChild(turnDamageLabel);
@@ -122,10 +119,10 @@ public class PlayerRowFactory
         var stats = _dataProvider.GetPlayerStats(playerData.PlayerInfo);
         if (stats == null) return;
 
-        labels[1].Text = $"{stats.DamagePercent:F1}%";
-        labels[2].Text = $"{stats.RunLog?.RealDamageDealt ?? 0}";
-        labels[3].Text = $"{stats.RoomLog?.RealDamageDealt ?? 0}";
-        labels[4].Text = $"{stats.TurnLog?.RealDamageDealt ?? 0}";
+        labels[1].Text = stats.PercentText;
+        labels[2].Text = stats.RunDamageText;
+        labels[3].Text = stats.RoomDamageText;
+        labels[4].Text = stats.TurnDamageText;
 
         var barTrack = wrapper.GetChild<HBoxContainer>(1);
         if (barTrack == null) return;

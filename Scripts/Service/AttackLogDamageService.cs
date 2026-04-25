@@ -92,7 +92,7 @@ public class AttackLogDamageService : AttackLogServiceBase
         State.TurnLogsData.TryGetValue(player.PlayerInfo, out var turnLogData);
 
         turnLogData?.EnqueueAttackLogData(newAttackLog);
-        turnLogData?.TurnLogSum.Add(newAttackLog);
+        turnLogData?.TurnLogSum.Accumulate(newAttackLog);
 
         State.InvalidateCache();
     }
@@ -120,7 +120,7 @@ public class AttackLogDamageService : AttackLogServiceBase
             State.TurnLogsData.TryGetValue(player.PlayerInfo, out var turnLogData);
 
             turnLogData?.EnqueueAttackLogData(newAttackLog);
-            turnLogData?.TurnLogSum.Add(newAttackLog);
+            turnLogData?.TurnLogSum.Accumulate(newAttackLog);
 
             State.InvalidateCache();
         }
@@ -164,7 +164,7 @@ public class AttackLogDamageService : AttackLogServiceBase
                 State.TurnLogsData.TryGetValue(player.PlayerInfo, out var turnLogData);
 
                 turnLogData?.EnqueueAttackLogData(newAttackLog);
-                turnLogData?.TurnLogSum.Add(newAttackLog);
+                turnLogData?.TurnLogSum.Accumulate(newAttackLog);
             }
         }
     }

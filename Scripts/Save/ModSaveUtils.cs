@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using AttackLog.Logger;
 using AttackLog.Model;
 using AttackLog.State;
@@ -35,7 +35,7 @@ public static class ModSaveUtils
         }
         catch (Exception ex)
         {
-            ModLogger.Log("Save", $"Failed to load save: {ex.Message}");
+            ModLogger.Error("Save", $"Failed to load save: {ex.Message}");
             LogState.Instance.ModSave = new ModSave(runState);
             OutputData();
         }
@@ -55,7 +55,7 @@ public static class ModSaveUtils
         }
         catch (Exception ex)
         {
-            ModLogger.Log("Save", $"Failed to save: {ex.Message}");
+            ModLogger.Error("Save", $"Failed to save: {ex.Message}");
         }
     }
 

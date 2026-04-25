@@ -27,6 +27,11 @@ public struct DamageGivenData
     /// 过量伤害（击杀后的溢出伤害）
     /// </summary>
     public int OverkillDamage { get; set; }
+    
+    /// <summary>
+    /// 伤害类型
+    /// </summary>
+    public DamageType DamageType { get; set; }
 
     /// <summary>
     /// 总伤害（格挡 + 血量 + 过量）
@@ -41,12 +46,14 @@ public struct DamageGivenData
     /// <summary>
     /// 从游戏原生 DamageResult 构造
     /// </summary>
-    /// <param name="damageResult">游戏伤害结果</param>
-    public DamageGivenData(DamageResult damageResult)
+    /// <param name="damageResult"></param>
+    /// <param name="damageType"></param>
+    public DamageGivenData(DamageResult damageResult ,DamageType damageType = DamageType.Common)
     {
         Receiver = damageResult.Receiver;
         BlockedDamage = damageResult.BlockedDamage;
         UnblockedDamage = damageResult.UnblockedDamage;
         OverkillDamage = damageResult.OverkillDamage;
+        DamageType = damageType;
     }
 }

@@ -45,6 +45,8 @@ public static class PowerDamageCalculateUtils
                     OverkillDamage = 0
                 };
             }
+            
+            CalculateDamageType(result[applier],damageGivenData.DamageType,damage);
         }
 
         while (damageGivenData.UnblockedDamage > 0)
@@ -70,6 +72,8 @@ public static class PowerDamageCalculateUtils
                     OverkillDamage = 0
                 };
             }
+            
+            CalculateDamageType(result[applier],damageGivenData.DamageType,damage);
         }
 
         while (damageGivenData.OverkillDamage > 0)
@@ -95,8 +99,22 @@ public static class PowerDamageCalculateUtils
                     OverkillDamage = damage
                 };
             }
+            
+            CalculateDamageType(result[applier],damageGivenData.DamageType,damage);
         }
 
         return result;
+    }
+
+    private static void CalculateDamageType(AttackLogModel attackLogModel,DamageType damageType,int damage)
+    {
+        if (damageType == DamageType.Poison)
+        {
+            attackLogModel.PoisonDamage += damage;
+        }
+        else if (damageType == DamageType.Doom)
+        {
+            attackLogModel.DoomDamage += damage;
+        }
     }
 }

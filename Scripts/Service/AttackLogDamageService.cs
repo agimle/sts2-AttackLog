@@ -139,7 +139,7 @@ public class AttackLogDamageService : AttackLogServiceBase
         Queue<IPowerRecord>? powerRecords = monsterRecord.GetPowerQueue(typeof(PoisonPower));
         if (powerRecords == null) return;
 
-        DamageGivenData damageLog = new DamageGivenData(result);
+        DamageGivenData damageLog = new DamageGivenData(result,DamageType.Poison);
 
         var playersDamageDict = PowerDamageCalculateUtils.DamageCalculate(powerRecords, damageLog);
 
@@ -190,7 +190,8 @@ public class AttackLogDamageService : AttackLogServiceBase
                 Receiver = creature,
                 BlockedDamage = 0,
                 UnblockedDamage = creature.CurrentHp,
-                OverkillDamage = 0
+                OverkillDamage = 0,
+                DamageType = DamageType.Doom
             };
 
             var playersDamageDict = PowerDamageCalculateUtils.DamageCalculate(powerRecords, damageGivenData);

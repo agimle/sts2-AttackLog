@@ -17,6 +17,21 @@ public class AttackLogModel
     /// <summary>过量击杀伤害</summary>
     public int OverkillDamage { get; set; }
 
+    /// <summary>
+    /// 毒造成的伤害
+    /// </summary>
+    public int PoisonDamage { get; set; }
+    
+    /// <summary>
+    /// 灾厄造成的伤害
+    /// </summary>
+    public int DoomDamage { get; set; }
+    
+    /// <summary>
+    /// 普通伤害
+    /// </summary>
+    public int CommonDamage => DamageOnHp - PoisonDamage - DoomDamage;
+    
     /// <summary>总伤害（格挡 + 血量 + 过量）</summary>
     public int TotalDamageDealt => DamageOnBlock + DamageOnHp + OverkillDamage;
 
@@ -43,6 +58,8 @@ public class AttackLogModel
         DamageOnBlock = 0;
         DamageOnHp = 0;
         OverkillDamage = 0;
+        PoisonDamage = 0;
+        DoomDamage = 0;
         ShieldGained = 0;
         EffectiveShield = 0;
         OverShield = 0;
@@ -57,6 +74,8 @@ public class AttackLogModel
         DamageOnBlock += other.DamageOnBlock;
         DamageOnHp += other.DamageOnHp;
         OverkillDamage += other.OverkillDamage;
+        PoisonDamage += other.PoisonDamage;
+        DoomDamage += other.DoomDamage;
         ShieldGained += other.ShieldGained;
         EffectiveShield += other.EffectiveShield;
         OverShield += other.OverShield;

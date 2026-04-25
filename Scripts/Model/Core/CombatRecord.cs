@@ -4,25 +4,22 @@ namespace AttackLog.Model;
 
 public class CombatRecord
 {
-    private readonly List<MonsterRecord> _monsterRecords = new();
+    private readonly Dictionary<Creature, MonsterRecord> _creatureToRecord = new();
 
-    public IReadOnlyList<MonsterRecord> MonsterRecords => _monsterRecords;
+    public IReadOnlyList<MonsterRecord> MonsterRecords => _creatureToRecord.Values.ToList();
 
     public void Clear()
     {
-        _monsterRecords.Clear();
+        _creatureToRecord.Clear();
     }
 
     public MonsterRecord EnsureExistMonster(Creature creature)
     {
-        for (int i = 0; i < _monsterRecords.Count; i++)
-        {
-            if (ReferenceEquals(_monsterRecords[i].Creature, creature))
-                return _monsterRecords[i];
-        }
+        if (_creatureToRecord.TryGetValue(creature, out var existing))
+            return existing;
 
         var record = new MonsterRecord(creature);
-        _monsterRecords.Add(record);
+        _creatureToRecord[creature] = record;
         return record;
     }
 
@@ -34,23 +31,11 @@ public class CombatRecord
 
     public MonsterRecord? GetMonsterRecord(Creature creature)
     {
-        for (int i = 0; i < _monsterRecords.Count; i++)
-        {
-            if (ReferenceEquals(_monsterRecords[i].Creature, creature))
-                return _monsterRecords[i];
-        }
-        return null;
+        return _creatureToRecord.TryGetValue(creature, out var record) ? record : null;
     }
 
     public void RemoveMonsterRecord(Creature creature)
     {
-        for (int i = 0; i < _monsterRecords.Count; i++)
-        {
-            if (ReferenceEquals(_monsterRecords[i].Creature, creature))
-            {
-                _monsterRecords.RemoveAt(i);
-                return;
-            }
-        }
+        _creatureToRecord.Remove(creature);
     }
 }

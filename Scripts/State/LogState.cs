@@ -24,7 +24,11 @@ public class LogState
         IsLogPanelCreated = false;
         _runState = new AttackLogRunState();
         _combatState = new AttackLogCombatState();
-        _viewCache = new ViewCache();
+        _viewCache = new ViewCache(
+            () => _runState.RunLog,
+            () => _combatState.TurnLogsData,
+            () => _combatState.RoomLogsData
+        );
     }
     #endregion
 

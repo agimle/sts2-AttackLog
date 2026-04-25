@@ -19,6 +19,7 @@ public static class HookPatches
 
     public static void BeforeCombatStartPostfix(IRunState runState, CombatState? combatState)
     {
+        if (combatState is null) return;
         AttackLogEventBus.Publish(new BeforeCombatStartEvent
         {
             RunState = runState,
@@ -46,6 +47,7 @@ public static class HookPatches
 
     public static void AfterCombatEndPostfix(IRunState runState, CombatState? combatState, CombatRoom room)
     {
+        if (combatState is null) return;
         AttackLogEventBus.Publish(new AfterCombatEndEvent
         {
             RunState = runState,

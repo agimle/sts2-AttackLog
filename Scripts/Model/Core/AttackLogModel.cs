@@ -34,7 +34,7 @@ public class AttackLogModel
         OverShield = 0;
     }
 
-    public void Plus(AttackLogModel other)
+    public void Accumulate(AttackLogModel other)
     {
         DamageOnBlock += other.DamageOnBlock;
         DamageOnHp += other.DamageOnHp;
@@ -47,24 +47,26 @@ public class AttackLogModel
     public static AttackLogModel Sum(AttackLogModel a, AttackLogModel b)
     {
         AttackLogModel result = new AttackLogModel();
-        result.Plus(a);
-        result.Plus(b);
+        result.Accumulate(a);
+        result.Accumulate(b);
         return result;
     }
-    public static AttackLogModel Sum(AttackLogModel a,AttackLogModel b,AttackLogModel c)
+
+    public static AttackLogModel Sum(AttackLogModel a, AttackLogModel b, AttackLogModel c)
     {
         AttackLogModel result = new AttackLogModel();
-        result.Plus(a);
-        result.Plus(b);
-        result.Plus(c);
+        result.Accumulate(a);
+        result.Accumulate(b);
+        result.Accumulate(c);
         return result;
     }
+
     public static AttackLogModel Sum(params AttackLogModel[] logs)
     {
         AttackLogModel result = new AttackLogModel();
         foreach (var log in logs)
         {
-            result.Plus(log);
+            result.Accumulate(log);
         }
         return result;
     }

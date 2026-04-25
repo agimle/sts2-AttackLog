@@ -4,8 +4,22 @@ namespace AttackLog.State;
 
 public class ViewCache
 {
+    private readonly Func<RunLog?> _runLogProvider;
+    private readonly Func<IReadOnlyDictionary<PlayerInfo, SingleTurnLogData>> _turnLogsProvider;
+    private readonly Func<IReadOnlyDictionary<PlayerInfo, SingleRoomLogData>> _roomLogsProvider;
+
     private Dictionary<PlayerInfo, CachedPlayerStats> _statsCache = new();
     private bool _cacheValid = false;
+
+    public ViewCache(
+        Func<RunLog?> runLogProvider,
+        Func<IReadOnlyDictionary<PlayerInfo, SingleTurnLogData>> turnLogsProvider,
+        Func<IReadOnlyDictionary<PlayerInfo, SingleRoomLogData>> roomLogsProvider)
+    {
+        _runLogProvider = runLogProvider;
+        _turnLogsProvider = turnLogsProvider;
+        _roomLogsProvider = roomLogsProvider;
+    }
 
     public void Invalidate()
     {
@@ -32,11 +46,10 @@ public class ViewCache
 
     private void RebuildCache()
     {
-        _statsCache.Clear();
-
-        var runLog = LogState.Instance.RunLog;
+        var runLog = _runLogProvider();
         if (runLog == null)
         {
+            _statsCache.Clear();
             _cacheValid = true;
             return;
         }
@@ -44,16 +57,25 @@ public class ViewCache
         var players = runLog.GetAllPlayers();
         if (players.Count == 0)
         {
+            _statsCache.Clear();
             _cacheValid = true;
             return;
         }
 
+        var currentPlayerInfos = new HashSet<PlayerInfo>();
         int totalDamage = 0;
 
         foreach (var player in players)
         {
-            var stats = CalculatePlayerStats(player.PlayerInfo);
-            _statsCache[player.PlayerInfo] = stats;
+            currentPlayerInfos.Add(player.PlayerInfo);
+
+            if (!_statsCache.TryGetValue(player.PlayerInfo, out var stats))
+            {
+                stats = new CachedPlayerStats();
+                _statsCache[player.PlayerInfo] = stats;
+            }
+
+            UpdatePlayerStats(stats, player.PlayerInfo);
             totalDamage += stats.RunLog?.RealDamageDealt ?? 0;
         }
 
@@ -69,49 +91,56 @@ public class ViewCache
             }
         }
 
+        var toRemove = _statsCache.Keys
+            .Where(k => !currentPlayerInfos.Contains(k))
+            .ToList();
+        foreach (var key in toRemove)
+        {
+            _statsCache.Remove(key);
+        }
+
         _cacheValid = true;
     }
 
-    private CachedPlayerStats CalculatePlayerStats(PlayerInfo info)
+    private void UpdatePlayerStats(CachedPlayerStats stats, PlayerInfo info)
     {
-        var stats = new CachedPlayerStats();
-
         stats.TurnLog = GetPlayerTurnLog(info);
         stats.RoomLog = GetPlayerRoomLog(info);
         stats.RunLog = GetPlayerRunLog(info);
-
-        return stats;
     }
 
     private AttackLogModel? GetPlayerTurnLog(PlayerInfo playerInfo)
     {
-        if (LogState.Instance.RunLog == null) return null;
+        var runLog = _runLogProvider();
+        if (runLog == null) return null;
 
-        return LogState.Instance.TurnLogsData.TryGetValue(playerInfo, out var turnLogData)
+        return _turnLogsProvider().TryGetValue(playerInfo, out var turnLogData)
             ? turnLogData.TurnLogSum
             : new AttackLogModel();
     }
 
     private AttackLogModel? GetPlayerRoomLog(PlayerInfo playerInfo)
     {
-        if (LogState.Instance.RunLog == null) return null;
+        var runLog = _runLogProvider();
+        if (runLog == null) return null;
 
         AttackLogModel? turnLog = GetPlayerTurnLog(playerInfo);
         if (turnLog == null) turnLog = new AttackLogModel();
 
-        return LogState.Instance.RoomLogsData.TryGetValue(playerInfo, out var roomLogData)
+        return _roomLogsProvider().TryGetValue(playerInfo, out var roomLogData)
             ? AttackLogModel.Sum(roomLogData.RoomLogSum, turnLog)
             : new AttackLogModel();
     }
 
     private AttackLogModel? GetPlayerRunLog(PlayerInfo playerInfo)
     {
-        if (LogState.Instance.RunLog == null) return null;
+        var runLog = _runLogProvider();
+        if (runLog == null) return null;
 
         AttackLogModel? roomLog = GetPlayerRoomLog(playerInfo);
         if (roomLog == null) roomLog = new AttackLogModel();
 
-        PlayerData? playerData = LogState.Instance.RunLog.GetPlayerByCreature(playerInfo.Creature);
+        PlayerData? playerData = runLog.GetPlayerByCreature(playerInfo.Creature);
         if (playerData == null) return new AttackLogModel();
 
         return AttackLogModel.Sum(playerData.RunLogData.RunLogSum, roomLog);

@@ -9,40 +9,62 @@ using MegaCrit.Sts2.Core.Models.Powers;
 
 namespace AttackLog.Service;
 
-public class AttackLogDamageService : IAttackLogService
+/// <summary>
+/// 伤害处理服务，负责三种伤害来源的记录：
+/// 1. 直接伤害（卡牌/攻击）→ 直接归因到玩家
+/// 2. 中毒伤害（间接伤害）→ 通过 PowerDamageCalculateUtils 归因到施毒者
+/// 3. 末日击杀 → 通过 PowerDamageCalculateUtils 归因到末日施放者
+/// 同时处理怪物死亡时清理 Power 记录
+/// </summary>
+public class AttackLogDamageService : AttackLogServiceBase
 {
-    public void Subscribe()
+    public AttackLogDamageService(LogState state) : base(state) { }
+
+    public override void Subscribe()
     {
-        AttackLogEventBus.Subscribe(AttackLogEventType.AfterDamageGiven, OnAfterDamageGiven);
-        AttackLogEventBus.Subscribe(AttackLogEventType.AfterDeath, OnAfterDeath);
-        AttackLogEventBus.Subscribe(AttackLogEventType.DoomKill, OnDoomKill);
+        AttackLogEventBus.Subscribe<AfterDamageGivenEvent>(OnAfterDamageGiven);
+        AttackLogEventBus.Subscribe<AfterDeathEvent>(OnAfterDeath);
+        AttackLogEventBus.Subscribe<DoomKillEvent>(OnDoomKill);
     }
 
-    public void Unsubscribe()
+    public override void Unsubscribe()
     {
-        AttackLogEventBus.Unsubscribe(AttackLogEventType.AfterDamageGiven, OnAfterDamageGiven);
-        AttackLogEventBus.Unsubscribe(AttackLogEventType.AfterDeath, OnAfterDeath);
-        AttackLogEventBus.Unsubscribe(AttackLogEventType.DoomKill, OnDoomKill);
+        AttackLogEventBus.Unsubscribe<AfterDamageGivenEvent>(OnAfterDamageGiven);
+        AttackLogEventBus.Unsubscribe<AfterDeathEvent>(OnAfterDeath);
+        AttackLogEventBus.Unsubscribe<DoomKillEvent>(OnDoomKill);
     }
 
-    private void OnAfterDamageGiven(IAttackLogEvent e)
+    /// <summary>
+    /// 伤害结算事件处理
+    /// </summary>
+    private void OnAfterDamageGiven(AfterDamageGivenEvent evt)
     {
-        var evt = (AfterDamageGivenEvent)e;
         HandleDamageGiven(evt.Dealer, evt.Result, evt.Target, evt.CardSource);
     }
 
-    private void OnAfterDeath(IAttackLogEvent e)
+    /// <summary>
+    /// 生物死亡事件处理：清理怪物 Power 记录
+    /// </summary>
+    private void OnAfterDeath(AfterDeathEvent evt)
     {
-        var evt = (AfterDeathEvent)e;
         ClearMonsterPower(evt.Creature);
     }
 
-    private void OnDoomKill(IAttackLogEvent e)
+    /// <summary>
+    /// 末日击杀事件处理：归因末日伤害
+    /// </summary>
+    private void OnDoomKill(DoomKillEvent evt)
     {
-        var evt = (DoomKillEvent)e;
         HandleDoomKill(evt.Creatures);
     }
 
+    /// <summary>
+    /// 处理伤害结算，区分直接伤害和间接伤害（中毒等）
+    /// </summary>
+    /// <param name="dealer">伤害来源</param>
+    /// <param name="result">伤害结果</param>
+    /// <param name="target">受伤目标</param>
+    /// <param name="cardSource">卡牌来源</param>
     private void HandleDamageGiven(Creature? dealer, DamageResult result, Creature target, CardModel? cardSource)
     {
         if (dealer == null)
@@ -85,62 +107,77 @@ public class AttackLogDamageService : IAttackLogService
             return;
         }
 
-        if (LogState.Instance.RunLog is null) return;
+        if (State.RunLog is null) return;
         if (dealer == null) return;
 
-        PlayerData? player = LogState.Instance.RunLog.GetPlayerByCreature(dealer);
+        PlayerData? player = State.RunLog.GetPlayerByCreature(dealer);
         if (player == null) return;
-        LogState.Instance.TurnLogsData.TryGetValue(player.PlayerInfo, out var turnLogData);
+        State.TurnLogsData.TryGetValue(player.PlayerInfo, out var turnLogData);
 
         turnLogData?.EnqueueAttackLogData(newAttackLog);
-        turnLogData?.TurnLogSum.Plus(newAttackLog);
+        turnLogData?.TurnLogSum.Accumulate(newAttackLog);
 
-        LogState.Instance.InvalidateCache();
+        State.InvalidateCache();
     }
 
+    /// <summary>
+    /// 处理中毒等间接伤害，通过 PowerDamageCalculateUtils 按施加顺序归因到施毒者
+    /// </summary>
+    /// <param name="dealer">伤害来源（中毒时为 null）</param>
+    /// <param name="result">伤害结果</param>
+    /// <param name="target">受伤目标</param>
+    /// <param name="cardSource">卡牌来源</param>
     private void HandlePoisonDamage(Creature? dealer, DamageResult result, Creature target,
         CardModel? cardSource)
     {
         if (dealer != null || cardSource != null) return;
         if (!target.IsEnemy) return;
 
-        MonsterRecord? monsterRecord = LogState.Instance.CombatRecord.GetMonsterRecord(target);
+        MonsterRecord? monsterRecord = State.CombatRecord.GetMonsterRecord(target);
         if (monsterRecord == null) return;
 
         Queue<IPowerRecord>? powerRecords = monsterRecord.GetPowerQueue(typeof(PoisonPower));
         if (powerRecords == null) return;
 
-        DamageGivenData damageLog = new DamageGivenData(result);
+        DamageGivenData damageLog = new DamageGivenData(result,DamageType.Poison);
 
         var playersDamageDict = PowerDamageCalculateUtils.DamageCalculate(powerRecords, damageLog);
 
         foreach ((Creature playerCreature, AttackLogModel newAttackLog) in playersDamageDict)
         {
-            PlayerData? player = LogState.Instance.RunLog?.GetPlayerByCreature(playerCreature);
+            PlayerData? player = State.RunLog?.GetPlayerByCreature(playerCreature);
             if (player == null) return;
-            LogState.Instance.TurnLogsData.TryGetValue(player.PlayerInfo, out var turnLogData);
+            State.TurnLogsData.TryGetValue(player.PlayerInfo, out var turnLogData);
 
             turnLogData?.EnqueueAttackLogData(newAttackLog);
-            turnLogData?.TurnLogSum.Plus(newAttackLog);
+            turnLogData?.TurnLogSum.Accumulate(newAttackLog);
 
-            LogState.Instance.InvalidateCache();
+            State.InvalidateCache();
         }
     }
 
+    /// <summary>
+    /// 清理怪物死亡后的 Power 记录
+    /// </summary>
+    /// <param name="creature">死亡的生物</param>
     private void ClearMonsterPower(Creature creature)
     {
         if (!creature.IsEnemy) return;
 
-        LogState.Instance.CombatRecord.RemoveMonsterRecord(creature);
+        State.CombatRecord.RemoveMonsterRecord(creature);
     }
 
+    /// <summary>
+    /// 处理末日击杀，将怪物的剩余血量归因到末日 Power 的施放者
+    /// </summary>
+    /// <param name="creatures">被末日击杀的生物列表</param>
     private void HandleDoomKill(IReadOnlyList<Creature> creatures)
     {
         if (creatures.Count == 0) return;
 
         foreach (var creature in creatures)
         {
-            MonsterRecord? monsterRecord = LogState.Instance.CombatRecord.GetMonsterRecord(creature);
+            MonsterRecord? monsterRecord = State.CombatRecord.GetMonsterRecord(creature);
 
             if (monsterRecord == null) continue;
 
@@ -153,19 +190,20 @@ public class AttackLogDamageService : IAttackLogService
                 Receiver = creature,
                 BlockedDamage = 0,
                 UnblockedDamage = creature.CurrentHp,
-                OverkillDamage = 0
+                OverkillDamage = 0,
+                DamageType = DamageType.Doom
             };
 
             var playersDamageDict = PowerDamageCalculateUtils.DamageCalculate(powerRecords, damageGivenData);
 
             foreach ((Creature playerCreature, AttackLogModel newAttackLog) in playersDamageDict)
             {
-                PlayerData? player = LogState.Instance.RunLog?.GetPlayerByCreature(playerCreature);
+                PlayerData? player = State.RunLog?.GetPlayerByCreature(playerCreature);
                 if (player == null) continue;
-                LogState.Instance.TurnLogsData.TryGetValue(player.PlayerInfo, out var turnLogData);
+                State.TurnLogsData.TryGetValue(player.PlayerInfo, out var turnLogData);
 
                 turnLogData?.EnqueueAttackLogData(newAttackLog);
-                turnLogData?.TurnLogSum.Plus(newAttackLog);
+                turnLogData?.TurnLogSum.Accumulate(newAttackLog);
             }
         }
     }

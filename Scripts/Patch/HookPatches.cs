@@ -10,15 +10,26 @@ using MegaCrit.Sts2.Core.ValueProps;
 
 namespace AttackLog.Patch;
 
+/// <summary>
+/// 游戏 Hook 补丁集合，将游戏生命周期事件转发到 EventBus。
+/// 每个方法对应一个 Harmony postfix，由 PatchUtils 注册到游戏 Hook 系统
+/// </summary>
 public static class HookPatches
 {
+    /// <summary>
+    /// Run 启动 Hook 的初始化入口，订阅 RunManager.RunStarted 事件
+    /// </summary>
     public static void OnRunStartPostfix()
     {
         RunManager.Instance.RunStarted += OnRunStarted;
     }
 
+    /// <summary>
+    /// 战斗开始前回调，发布 BeforeCombatStartEvent
+    /// </summary>
     public static void BeforeCombatStartPostfix(IRunState runState, CombatState? combatState)
     {
+        if (combatState is null) return;
         AttackLogEventBus.Publish(new BeforeCombatStartEvent
         {
             RunState = runState,
@@ -26,6 +37,9 @@ public static class HookPatches
         });
     }
 
+    /// <summary>
+    /// 回合方开始前回调，发布 BeforeSideTurnStartEvent
+    /// </summary>
     public static void BeforeSideTurnStartPostfix(CombatState combatState, CombatSide side)
     {
         AttackLogEventBus.Publish(new BeforeSideTurnStartEvent
@@ -35,6 +49,9 @@ public static class HookPatches
         });
     }
 
+    /// <summary>
+    /// 回合结束后回调，发布 AfterTurnEndEvent
+    /// </summary>
     public static void AfterTurnEndPostfix(CombatState combatState, CombatSide side)
     {
         AttackLogEventBus.Publish(new AfterTurnEndEvent
@@ -44,8 +61,12 @@ public static class HookPatches
         });
     }
 
+    /// <summary>
+    /// 战斗结束后回调，发布 AfterCombatEndEvent
+    /// </summary>
     public static void AfterCombatEndPostfix(IRunState runState, CombatState? combatState, CombatRoom room)
     {
+        if (combatState is null) return;
         AttackLogEventBus.Publish(new AfterCombatEndEvent
         {
             RunState = runState,
@@ -53,6 +74,9 @@ public static class HookPatches
         });
     }
 
+    /// <summary>
+    /// 伤害结算后回调，发布 AfterDamageGivenEvent
+    /// </summary>
     public static void AfterDamageGivenPostfix(PlayerChoiceContext choiceContext, CombatState combatState, Creature? dealer, DamageResult results, ValueProp props, Creature target, CardModel? cardSource)
     {
         AttackLogEventBus.Publish(new AfterDamageGivenEvent
@@ -64,6 +88,9 @@ public static class HookPatches
         });
     }
 
+    /// <summary>
+    /// 生物死亡后回调，发布 AfterDeathEvent
+    /// </summary>
     public static void AfterDeathPostfix(IRunState runState, CombatState? combatState, Creature creature, bool wasRemovalPrevented, float deathAnimLength)
     {
         AttackLogEventBus.Publish(new AfterDeathEvent
@@ -72,6 +99,9 @@ public static class HookPatches
         });
     }
 
+    /// <summary>
+    /// Run 启动事件处理器，发布 RunStartedEvent
+    /// </summary>
     private static void OnRunStarted(RunState runState)
     {
         AttackLogEventBus.Publish(new RunStartedEvent

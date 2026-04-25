@@ -1,4 +1,4 @@
-﻿using AttackLog.Model;
+using AttackLog.Model;
 using MegaCrit.Sts2.Core.Runs;
 
 
@@ -20,12 +20,32 @@ public class ModSave
     /// 玩家Id -> 玩家数据
     /// </summary>
     public Dictionary<ulong, SingleRunLogData> PlayerDataDict { get; set; } = new();
-    
+
+    /// <summary>
+    /// 主面板位置 X
+    /// </summary>
+    public float MainPanelX { get; set; } = -1f;
+
+    /// <summary>
+    /// 主面板位置 Y
+    /// </summary>
+    public float MainPanelY { get; set; } = -1f;
+
+    /// <summary>
+    /// 伤害统计面板位置 X
+    /// </summary>
+    public float DamageStatsPanelX { get; set; } = -1f;
+
+    /// <summary>
+    /// 伤害统计面板位置 Y
+    /// </summary>
+    public float DamageStatsPanelY { get; set; } = -1f;
+
     /// <summary>
     /// 无参构造函数（反序列化用）
     /// </summary>
     public ModSave() { }
-    
+
     /// <summary>
     /// 初始化
     /// </summary>

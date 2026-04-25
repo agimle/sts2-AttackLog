@@ -7,33 +7,57 @@ using MegaCrit.Sts2.Core.Models;
 
 namespace AttackLog.Service;
 
-public class AttackLogPowerService : IAttackLogService
+/// <summary>
+/// Power 施加服务，当 Power 被施加到怪物身上时，
+/// 通过 PowerRecordFactory 创建对应的 Power 记录并存入 CombatRecord
+/// </summary>
+public class AttackLogPowerService : AttackLogServiceBase
 {
-    public void Subscribe()
+    public AttackLogPowerService(LogState state) : base(state) { }
+
+    public override void Subscribe()
     {
-        AttackLogEventBus.Subscribe(AttackLogEventType.PowerReceived, OnPowerReceived);
+        AttackLogEventBus.Subscribe<PowerReceivedEvent>(OnPowerReceived);
     }
 
-    public void Unsubscribe()
+    public override void Unsubscribe()
     {
-        AttackLogEventBus.Unsubscribe(AttackLogEventType.PowerReceived, OnPowerReceived);
+        AttackLogEventBus.Unsubscribe<PowerReceivedEvent>(OnPowerReceived);
     }
 
-    private void OnPowerReceived(IAttackLogEvent e)
+    /// <summary>
+    /// Power 施加事件处理
+    /// </summary>
+    private void OnPowerReceived(PowerReceivedEvent evt)
     {
-        var evt = (PowerReceivedEvent)e;
         AddPowerRecordToCombatRecord(evt.CombatState, evt.Power, evt.Amount, evt.Applier);
     }
 
+    /// <summary>
+    /// 创建 Power 记录并添加到 CombatRecord
+    /// </summary>
+    /// <param name="combatState">当前战斗状态</param>
+    /// <param name="power">Power 模型</param>
+    /// <param name="amount">施加层数</param>
+    /// <param name="applier">施放者</param>
     private void AddPowerRecordToCombatRecord(CombatState combatState, PowerModel power, decimal amount,
         Creature? applier)
     {
         IPowerRecord? powerRecord = TryCreatePowerRecord(combatState, power, amount, applier);
         if (powerRecord is null) return;
 
-        LogState.Instance.CombatRecord.AddPowerRecord(power.Owner, powerRecord);
+        State.CombatRecord.AddPowerRecord(power.Owner, powerRecord);
     }
 
+    /// <summary>
+    /// 尝试通过 PowerRecordFactory 创建 Power 记录。
+    /// 仅当施放者存在且 Power 类型已注册时返回记录实例
+    /// </summary>
+    /// <param name="combatState">当前战斗状态</param>
+    /// <param name="power">Power 模型</param>
+    /// <param name="amount">施加层数</param>
+    /// <param name="applier">施放者</param>
+    /// <returns>Power 记录，无法创建时返回 null</returns>
     private static IPowerRecord? TryCreatePowerRecord(CombatState combatState, PowerModel power, decimal amount,
         Creature? applier)
     {

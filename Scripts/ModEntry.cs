@@ -1,4 +1,4 @@
-﻿using AttackLog.Core;
+using AttackLog.Core;
 using AttackLog.Logger;
 using AttackLog.Model;
 using AttackLog.Patch;
@@ -13,11 +13,19 @@ using MegaCrit.Sts2.Core.Models.Powers;
 
 namespace AttackLog;
 
+/// <summary>
+/// Mod 入口类，负责初始化 Harmony 补丁、服务定位器、能力记录工厂和面板创建
+/// </summary>
 [ModInitializer("Init")]
 public class ModEntry
 {
+    /// <summary>Harmony 实例</summary>
     private static Harmony? _harmony;
 
+    /// <summary>
+    /// Mod 初始化入口，由游戏 Mod 加载器调用。
+    /// 执行顺序：Harmony 补丁 → 服务初始化 → Hook 注册 → 能力工厂加载 → 面板订阅 → 日志初始化
+    /// </summary>
     public static void Init()
     {
         if (_harmony != null)
@@ -52,12 +60,16 @@ public class ModEntry
         LoadPowerRecordFactory();
 
         AttackLogPanel.SubscribeCreationEvent();
+        DamageTypeStatsPanel.SubscribeCreationEvent();
 
         ModLogger.Clear();
         ModLogger.Log("模组初始化完成");
         Log.Info("Mod initialized!");
     }
 
+    /// <summary>
+    /// 注册所有能力记录工厂（中毒、末日）
+    /// </summary>
     private static void LoadPowerRecordFactory()
     {
         PoisonRecord.Register();

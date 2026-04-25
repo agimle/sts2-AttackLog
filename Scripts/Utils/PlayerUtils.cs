@@ -3,8 +3,17 @@ using MegaCrit.Sts2.Core.Platform;
 
 namespace AttackLog.Utils;
 
+/// <summary>
+/// 玩家工具类，通过平台 API 获取玩家显示名称。
+/// 过滤无效名称（空字符串、默认占位符、纯数字 ID）
+/// </summary>
 public static class PlayerUtils
 {
+    /// <summary>
+    /// 根据 NetId 获取玩家显示名称
+    /// </summary>
+    /// <param name="netId">玩家网络 ID</param>
+    /// <returns>有效名称返回名称字符串，无效则返回 null</returns>
     public static string? GetPlayerName(ulong netId)
     {
         try

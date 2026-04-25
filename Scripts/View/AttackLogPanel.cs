@@ -1,26 +1,28 @@
 using Godot;
 using AttackLog.Core;
 using AttackLog.Model;
+using AttackLog.Save;
 using AttackLog.State;
-using AttackLog.Utils;
 using MegaCrit.Sts2.Core.Runs;
 
 namespace AttackLog.View;
 
+/// <summary>
+/// 战斗统计面板，以浮动窗口形式显示各玩家的伤害统计。
+/// 订阅所有游戏事件并按节流间隔刷新 UI，支持拖拽移动、排序切换和增量更新。
+/// </summary>
 public sealed partial class AttackLogPanel : CanvasLayer
 {
+    /// <summary>面板宽度</summary>
     private const float PanelWidth = 460f;
+
+    /// <summary>获取面板宽度</summary>
+    public static float GetPanelWidth() => PanelWidth;
+
+    /// <summary>刷新节流间隔（秒）</summary>
     private const float RefreshInterval = 0.1f;
 
-    private static readonly Color White = new("FFFFFF");
-    private static readonly Color Gray = new("A0A8B4");
-    private static readonly Color BgDark = new("000000B0");
-    private static readonly Color Border = new("3A3A5C");
-    private static readonly Color PercentColor = new("EC4899");
-    private static readonly Color TotalColor = new("F59E0B");
-    private static readonly Color RoomColor = new("10B981");
-    private static readonly Color TurnColor = new("6366F1");
-
+    /// <summary>触发面板刷新的事件类型列表</summary>
     private static readonly AttackLogEventType[] RefreshOnEvents =
     {
         AttackLogEventType.RunStarted,
@@ -35,56 +37,96 @@ public sealed partial class AttackLogPanel : CanvasLayer
         AttackLogEventType.RefreshRequested
     };
 
+    /// <summary>面板单例实例</summary>
     private static AttackLogPanel? _instance;
+
+    /// <summary>数据提供者，默认使用 LogDataProvider</summary>
     private static ILogDataProvider _dataProvider = LogDataProvider.Default;
 
+    /// <summary>面板根容器</summary>
     private PanelContainer? _root;
+
+    /// <summary>玩家列表容器</summary>
     private VBoxContainer? _playerList;
+
+    /// <summary>空状态提示标签</summary>
     private Label? _emptyLabel;
 
-    private Dictionary<PlayerInfo, PanelContainer> _playerRows = new();
-    private float _lastRefreshTime = 0f;
-    private bool _refreshRequested = false;
-
-    private bool _isDragging = false;
-    private Vector2 _dragOffset = Vector2.Zero;
-
-    private enum SortMode { Total, Room }
-    private SortMode _sortMode = SortMode.Total;
+    /// <summary>排序切换按钮</summary>
     private Button? _sortButton;
 
+    /// <summary>玩家信息 → 行 UI 的映射</summary>
+    private Dictionary<PlayerInfo, PanelContainer> _playerRows = new();
+
+    /// <summary>上次刷新时间戳</summary>
+    private float _lastRefreshTime = 0f;
+
+    /// <summary>是否有待刷新请求</summary>
+    private bool _refreshRequested = false;
+
+    /// <summary>拖拽处理器</summary>
+    private PanelDragHandler _dragHandler = new();
+
+    /// <summary>排序控制器</summary>
+    private PanelSortController _sortController;
+
+    /// <summary>玩家行工厂</summary>
+    private PlayerRowFactory _rowFactory;
+
+    /// <summary>构造函数，初始化排序控制器和行工厂</summary>
+    public AttackLogPanel()
+    {
+        _sortController = new PanelSortController(LogState.Instance);
+        _rowFactory = new PlayerRowFactory(_dataProvider);
+    }
+
+    /// <summary>
+    /// 替换数据提供者，支持自定义实现（如测试 Mock）
+    /// </summary>
+    /// <param name="provider">新的数据提供者</param>
     public static void SetDataProvider(ILogDataProvider provider)
     {
         _dataProvider = provider ?? LogDataProvider.Default;
     }
 
+    /// <summary>进入场景树：设置层级、订阅事件</summary>
     public override void _EnterTree()
     {
         Layer = 100;
         Name = nameof(AttackLogPanel);
+        _instance = this;
+        SubscribeAll();
     }
 
+    /// <summary>退出场景树：取消订阅事件、清理单例引用</summary>
     public override void _ExitTree()
     {
-        if (ReferenceEquals(_instance, this)) _instance = null;
         UnsubscribeAll();
+        if (ReferenceEquals(_instance, this))
+            _instance = null;
     }
 
+    /// <summary>初始化：构建 UI、设置位置、首次刷新</summary>
     public override void _Ready()
     {
         BuildUi();
         SetInitialPosition();
         Refresh();
+        _dragHandler.DragEnded += OnDragEnded;
     }
 
+    /// <summary>拖拽结束回调，保存面板位置</summary>
+    private void OnDragEnded()
+    {
+        if (_root != null)
+        {
+            ModSaveUtils.SavePanelPosition(true, _root.Position.X, _root.Position.Y);
+        }
+    }
+
+    /// <summary>每帧处理：节流刷新 UI</summary>
     public override void _Process(double delta)
     {
-        if (_isDragging && _root != null)
-        {
-            var newPos = _root.GetGlobalMousePosition() - _dragOffset;
-            _root.Position = ClampToScreen(newPos, _root.Size);
-        }
-
         if (_refreshRequested)
         {
             float currentTime = Time.GetTicksMsec() / 1000f;
@@ -97,11 +139,17 @@ public sealed partial class AttackLogPanel : CanvasLayer
         }
     }
 
+    /// <summary>
+    /// 游戏事件回调，请求刷新面板
+    /// </summary>
     private void OnGameEvent(IAttackLogEvent e)
     {
         RequestRefresh();
     }
 
+    /// <summary>
+    /// 请求刷新面板，实现节流机制：超过间隔立即刷新，否则标记待刷新
+    /// </summary>
     private void RequestRefresh()
     {
         float currentTime = Time.GetTicksMsec() / 1000f;
@@ -116,6 +164,7 @@ public sealed partial class AttackLogPanel : CanvasLayer
         }
     }
 
+    /// <summary>订阅所有触发刷新的事件</summary>
     private void SubscribeAll()
     {
         foreach (var eventType in RefreshOnEvents)
@@ -124,6 +173,7 @@ public sealed partial class AttackLogPanel : CanvasLayer
         }
     }
 
+    /// <summary>取消订阅所有事件</summary>
     private void UnsubscribeAll()
     {
         foreach (var eventType in RefreshOnEvents)
@@ -132,6 +182,9 @@ public sealed partial class AttackLogPanel : CanvasLayer
         }
     }
 
+    /// <summary>
+    /// 构建面板 UI 结构：标题栏、表头、玩家列表、空状态提示
+    /// </summary>
     private void BuildUi()
     {
         _root = new PanelContainer
@@ -142,19 +195,7 @@ public sealed partial class AttackLogPanel : CanvasLayer
             SizeFlagsVertical = Control.SizeFlags.ShrinkBegin
         };
 
-        _root.AddThemeStyleboxOverride("panel", new StyleBoxFlat
-        {
-            BgColor = BgDark,
-            BorderColor = Border,
-            BorderWidthLeft = 1,
-            BorderWidthTop = 1,
-            BorderWidthRight = 1,
-            BorderWidthBottom = 1,
-            CornerRadiusTopLeft = 8,
-            CornerRadiusTopRight = 8,
-            CornerRadiusBottomLeft = 8,
-            CornerRadiusBottomRight = 8
-        });
+        _root.AddThemeStyleboxOverride("panel", PanelTheme.CreateRootStyle());
 
         var margin = new MarginContainer();
         margin.SetAnchorsPreset(Control.LayoutPreset.FullRect);
@@ -169,7 +210,7 @@ public sealed partial class AttackLogPanel : CanvasLayer
         var titleBar = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         titleBar.AddThemeConstantOverride("separation", 6);
 
-        var title = MakeLabel("⚔ 战斗统计", 16, White, true);
+        var title = PanelTheme.MakeLabel("⚔ 战斗统计", 16, PanelTheme.White);
         title.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         title.HorizontalAlignment = HorizontalAlignment.Left;
         titleBar.AddChild(title);
@@ -177,42 +218,33 @@ public sealed partial class AttackLogPanel : CanvasLayer
         _sortButton = new Button
         {
             Text = "▼ 总计",
-            Flat = true,
-            CustomMinimumSize = new Vector2(60, 28),
-            MouseFilter = Control.MouseFilterEnum.Stop
+            CustomMinimumSize = new Vector2(65, 28)
         };
-        _sortButton.AddThemeFontSizeOverride("font_size", 11);
-        _sortButton.AddThemeColorOverride("font_color", TotalColor);
-        _sortButton.AddThemeColorOverride("font_hover_color", TotalColor);
-        _sortButton.AddThemeColorOverride("font_pressed_color", TotalColor);
-        var btnEmptyStyle = new StyleBoxEmpty();
-        _sortButton.AddThemeStyleboxOverride("normal", btnEmptyStyle);
-        _sortButton.AddThemeStyleboxOverride("hover", btnEmptyStyle);
-        _sortButton.AddThemeStyleboxOverride("pressed", btnEmptyStyle);
-        _sortButton.AddThemeStyleboxOverride("focus", btnEmptyStyle);
+        _sortButton.AddThemeFontSizeOverride("font_size", 13);
         _sortButton.Pressed += OnSortToggled;
+        ApplySortButtonColors(PanelTheme.TotalColor);
         titleBar.AddChild(_sortButton);
 
         col.AddChild(titleBar);
 
-        var separator = HLine(1, Border);
+        var separator = HLine(1, PanelTheme.Border);
         col.AddChild(separator);
 
         var headerMargin = new MarginContainer();
         headerMargin.AddThemeConstantOverride("margin_left", 8);
         headerMargin.AddThemeConstantOverride("margin_right", 8);
-        var headerRow = BuildHeaderRow();
+        var headerRow = PlayerRowFactory.BuildHeaderRow();
         headerMargin.AddChild(headerRow);
         col.AddChild(headerMargin);
 
-        var separator2 = HLine(1, Border);
+        var separator2 = HLine(1, PanelTheme.Border);
         col.AddChild(separator2);
 
         _playerList = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         _playerList.AddThemeConstantOverride("separation", 6);
         col.AddChild(_playerList);
 
-        _emptyLabel = MakeLabel("No players registered", 12, Gray);
+        _emptyLabel = PanelTheme.MakeLabel("No players registered", 12, PanelTheme.Gray);
         _emptyLabel.HorizontalAlignment = HorizontalAlignment.Center;
         col.AddChild(_emptyLabel);
 
@@ -223,11 +255,21 @@ public sealed partial class AttackLogPanel : CanvasLayer
         _root.GuiInput += OnRootGuiInput;
     }
 
+    /// <summary>
+    /// 设置面板初始位置（屏幕右侧偏上）
+    /// </summary>
     private void SetInitialPosition()
     {
         if (_root == null) return;
         var viewport = GetViewport();
         if (viewport == null) return;
+
+        var savedPos = ModSaveUtils.GetPanelPosition(true);
+        if (savedPos.HasValue)
+        {
+            _root.Position = ClampToScreen(savedPos.Value, _root.Size);
+            return;
+        }
 
         var screenSize = viewport.GetVisibleRect().Size;
         float x = screenSize.X - PanelWidth - 16f;
@@ -235,6 +277,9 @@ public sealed partial class AttackLogPanel : CanvasLayer
         _root.Position = ClampToScreen(new Vector2(x, y), _root.Size);
     }
 
+    /// <summary>
+    /// 将面板位置限制在屏幕范围内
+    /// </summary>
     private Vector2 ClampToScreen(Vector2 pos, Vector2 panelSize)
     {
         var viewport = GetViewport();
@@ -252,44 +297,72 @@ public sealed partial class AttackLogPanel : CanvasLayer
         );
     }
 
+    /// <summary>
+    /// 根节点输入事件处理，转发给拖拽处理器
+    /// </summary>
     private void OnRootGuiInput(InputEvent @event)
     {
-        if (@event is InputEventMouseButton mb)
+        if (_root != null)
         {
-            if (mb.ButtonIndex == MouseButton.Left)
-            {
-                if (mb.Pressed)
-                {
-                    _isDragging = true;
-                    _dragOffset = _root!.GetGlobalMousePosition() - _root.Position;
-                }
-                else
-                {
-                    _isDragging = false;
-                }
-            }
+            _dragHandler.HandleInput(@event, _root);
         }
     }
 
+    /// <summary>
+    /// 排序切换回调，切换排序维度并刷新面板
+    /// </summary>
     private void OnSortToggled()
     {
-        _sortMode = _sortMode == SortMode.Total ? SortMode.Room : SortMode.Total;
+        _sortController.Toggle();
         UpdateSortButton();
         ClearAllRows();
         ResetRootSize();
         Refresh();
     }
 
+    /// <summary>更新排序按钮文本和颜色</summary>
     private void UpdateSortButton()
     {
         if (_sortButton == null) return;
-        _sortButton.Text = _sortMode == SortMode.Total ? "▼ 总计" : "▼ 房间";
-        var color = _sortMode == SortMode.Total ? TotalColor : RoomColor;
+        bool isTotal = _sortController.SortByTotal;
+        _sortButton.Text = isTotal ? "▼ 总计" : "▼ 房间";
+        ApplySortButtonColors(isTotal ? PanelTheme.TotalColor : PanelTheme.RoomColor);
+    }
+
+    /// <summary>应用排序按钮的主题颜色</summary>
+    private void ApplySortButtonColors(Color color)
+    {
+        if (_sortButton == null) return;
         _sortButton.AddThemeColorOverride("font_color", color);
         _sortButton.AddThemeColorOverride("font_hover_color", color);
         _sortButton.AddThemeColorOverride("font_pressed_color", color);
+
+        var btnStyle = new StyleBoxFlat
+        {
+            BgColor = new Color(color.R, color.G, color.B, 0.25f),
+            BorderColor = new Color(color.R, color.G, color.B, 0.6f),
+            BorderWidthLeft = 1,
+            BorderWidthTop = 1,
+            BorderWidthRight = 1,
+            BorderWidthBottom = 1,
+            CornerRadiusTopLeft = 4,
+            CornerRadiusTopRight = 4,
+            CornerRadiusBottomLeft = 4,
+            CornerRadiusBottomRight = 4,
+            ContentMarginLeft = 8,
+            ContentMarginRight = 8,
+            ContentMarginTop = 2,
+            ContentMarginBottom = 2
+        };
+        _sortButton.AddThemeStyleboxOverride("normal", btnStyle);
+        _sortButton.AddThemeStyleboxOverride("hover", btnStyle);
+        _sortButton.AddThemeStyleboxOverride("pressed", btnStyle);
+        _sortButton.AddThemeStyleboxOverride("focus", btnStyle);
     }
 
+    /// <summary>
+    /// 刷新面板内容：获取玩家数据、排序、增量更新行
+    /// </summary>
     private void Refresh()
     {
         if (_playerList == null || _emptyLabel == null) return;
@@ -315,11 +388,12 @@ public sealed partial class AttackLogPanel : CanvasLayer
             return;
         }
 
-        players = SortPlayers(players);
+        var sorted = _sortController.GetSortedPlayers();
+        var sortedPlayerData = SortPlayerDataByInfo(players, sorted);
 
         _emptyLabel.Visible = false;
 
-        var currentPlayerInfos = new HashSet<PlayerInfo>(players.Select(p => p.PlayerInfo));
+        var currentPlayerInfos = new HashSet<PlayerInfo>(sortedPlayerData.Select(p => p.PlayerInfo));
 
         var toRemove = _playerRows.Keys
             .Where(info => !currentPlayerInfos.Contains(info))
@@ -336,38 +410,38 @@ public sealed partial class AttackLogPanel : CanvasLayer
         }
 
         int index = 0;
-        foreach (var playerData in players)
+        foreach (var playerData in sortedPlayerData)
         {
             if (_playerRows.TryGetValue(playerData.PlayerInfo, out var existingRow))
             {
-                UpdatePlayerRow(existingRow, playerData, index);
+                _rowFactory.UpdateRow(existingRow, playerData);
             }
             else
             {
-                var newRow = BuildPlayerRow(playerData, index);
+                var newRow = _rowFactory.BuildRow(playerData);
                 _playerList.AddChild(newRow);
                 _playerRows[playerData.PlayerInfo] = newRow;
             }
             index++;
         }
 
-        ReorderPlayerRows(players);
+        ReorderPlayerRows(sortedPlayerData);
 
         ResetRootSize();
     }
 
-    private List<PlayerData> SortPlayers(List<PlayerData> players)
+    /// <summary>
+    /// 按排序后的 PlayerInfo 顺序重排 PlayerData 列表
+    /// </summary>
+    private List<PlayerData> SortPlayerDataByInfo(List<PlayerData> players, List<KeyValuePair<PlayerInfo, CachedPlayerStats>> sortedInfos)
     {
-        return players.OrderByDescending(p =>
-        {
-            var stats = _dataProvider.GetPlayerStats(p.PlayerInfo);
-            if (stats == null) return 0f;
-            return _sortMode == SortMode.Total
-                ? stats.RunLog?.RealDamageDealt ?? 0
-                : stats.RoomLog?.RealDamageDealt ?? 0;
-        }).ToList();
+        var infoOrder = sortedInfos.Select((kv, i) => (kv.Key, i)).ToDictionary(x => x.Key, x => x.i);
+        return players.OrderBy(p => infoOrder.TryGetValue(p.PlayerInfo, out var idx) ? idx : int.MaxValue).ToList();
     }
 
+    /// <summary>
+    /// 按排序顺序重排玩家行 UI 节点
+    /// </summary>
     private void ReorderPlayerRows(List<PlayerData> sortedPlayers)
     {
         if (_playerList == null) return;
@@ -380,6 +454,7 @@ public sealed partial class AttackLogPanel : CanvasLayer
         }
     }
 
+    /// <summary>清除所有玩家行并释放资源</summary>
     private void ClearAllRows()
     {
         foreach (var row in _playerRows.Values)
@@ -390,224 +465,14 @@ public sealed partial class AttackLogPanel : CanvasLayer
         _playerRows.Clear();
     }
 
+    /// <summary>重置根容器尺寸以适应内容</summary>
     private void ResetRootSize()
     {
         if (_root == null) return;
         _root.ResetSize();
     }
 
-    private static HBoxContainer BuildHeaderRow()
-    {
-        var row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        row.AddThemeConstantOverride("separation", 8);
-
-        var iconPlaceholder = new Control
-        {
-            CustomMinimumSize = new Vector2(24, 24)
-        };
-        row.AddChild(iconPlaceholder);
-
-        var playerHeader = MakeLabel("玩家", 11, Gray);
-        playerHeader.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        playerHeader.HorizontalAlignment = HorizontalAlignment.Left;
-        row.AddChild(playerHeader);
-
-        var percentHeader = MakeLabel("占比", 11, PercentColor);
-        percentHeader.CustomMinimumSize = new Vector2(60, 0);
-        percentHeader.HorizontalAlignment = HorizontalAlignment.Right;
-        row.AddChild(percentHeader);
-
-        var totalHeader = MakeLabel("总计", 11, TotalColor);
-        totalHeader.CustomMinimumSize = new Vector2(60, 0);
-        totalHeader.HorizontalAlignment = HorizontalAlignment.Right;
-        row.AddChild(totalHeader);
-
-        var roomHeader = MakeLabel("房间", 11, RoomColor);
-        roomHeader.CustomMinimumSize = new Vector2(60, 0);
-        roomHeader.HorizontalAlignment = HorizontalAlignment.Right;
-        row.AddChild(roomHeader);
-
-        var turnHeader = MakeLabel("回合", 11, TurnColor);
-        turnHeader.CustomMinimumSize = new Vector2(60, 0);
-        turnHeader.HorizontalAlignment = HorizontalAlignment.Right;
-        row.AddChild(turnHeader);
-
-        return row;
-    }
-
-    private static PanelContainer BuildPlayerRow(PlayerData playerData, int rowIndex)
-    {
-        var card = new PanelContainer
-        {
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
-        };
-
-        var baseColor = playerData.PlayerInfo.NameColor;
-        var borderColor = DarkenColor(baseColor, 0.3f);
-        var bgColor = new Color(baseColor.R, baseColor.G, baseColor.B, 0.15f);
-
-        card.AddThemeStyleboxOverride("panel", new StyleBoxFlat
-        {
-            BgColor = bgColor,
-            BorderColor = borderColor,
-            BorderWidthLeft = 1,
-            BorderWidthTop = 1,
-            BorderWidthRight = 1,
-            BorderWidthBottom = 1,
-            CornerRadiusTopLeft = 4,
-            CornerRadiusTopRight = 4,
-            CornerRadiusBottomLeft = 4,
-            CornerRadiusBottomRight = 4,
-            ContentMarginLeft = 8,
-            ContentMarginRight = 8,
-            ContentMarginTop = 4,
-            ContentMarginBottom = 4
-        });
-
-        var row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        row.AddThemeConstantOverride("separation", 8);
-
-        var iconTexture = playerData.PlayerInfo.IconTexture;
-        if (iconTexture != null)
-        {
-            var icon = new TextureRect
-            {
-                Texture = iconTexture,
-                CustomMinimumSize = new Vector2(24, 24),
-                StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize
-            };
-            row.AddChild(icon);
-        }
-
-        var name = playerData.PlayerInfo.PlayerName + " [" + playerData.PlayerInfo.Title.GetFormattedText() + "]";
-        var nameLabel = MakeLabel(name, 14, baseColor);
-        nameLabel.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        row.AddChild(nameLabel);
-
-        var stats = _dataProvider.GetPlayerStats(playerData.PlayerInfo) ?? new CachedPlayerStats();
-
-        var percentLabel = MakeLabel($"{stats.DamagePercent:F1}%", 14, PercentColor);
-        percentLabel.CustomMinimumSize = new Vector2(60, 0);
-        percentLabel.HorizontalAlignment = HorizontalAlignment.Right;
-        row.AddChild(percentLabel);
-
-        var runDamage = stats.RunLog?.RealDamageDealt ?? 0;
-        var runDamageLabel = MakeLabel($"{runDamage}", 14, TotalColor);
-        runDamageLabel.CustomMinimumSize = new Vector2(60, 0);
-        runDamageLabel.HorizontalAlignment = HorizontalAlignment.Right;
-        row.AddChild(runDamageLabel);
-
-        var roomDamage = stats.RoomLog?.RealDamageDealt ?? 0;
-        var roomDamageLabel = MakeLabel($"{roomDamage}", 14, RoomColor);
-        roomDamageLabel.CustomMinimumSize = new Vector2(60, 0);
-        roomDamageLabel.HorizontalAlignment = HorizontalAlignment.Right;
-        row.AddChild(roomDamageLabel);
-
-        var turnDamage = stats.TurnLog?.RealDamageDealt ?? 0;
-        var turnDamageLabel = MakeLabel($"{turnDamage}", 14, TurnColor);
-        turnDamageLabel.CustomMinimumSize = new Vector2(60, 0);
-        turnDamageLabel.HorizontalAlignment = HorizontalAlignment.Right;
-        row.AddChild(turnDamageLabel);
-
-        var wrapper = new VBoxContainer
-        {
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
-        };
-        wrapper.AddThemeConstantOverride("separation", 4);
-        wrapper.AddChild(row);
-
-        float percent = Mathf.Clamp(stats.DamagePercent / 100f, 0.01f, 1f);
-
-        var barFill = new ColorRect
-        {
-            Color = new Color(baseColor.R, baseColor.G, baseColor.B, 0.7f),
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-            SizeFlagsStretchRatio = percent,
-            Name = "BarFill",
-            MouseFilter = Control.MouseFilterEnum.Ignore
-        };
-
-        var barEmpty = new Control
-        {
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-            SizeFlagsStretchRatio = 1f - percent,
-            MouseFilter = Control.MouseFilterEnum.Ignore
-        };
-
-        var barTrack = new HBoxContainer
-        {
-            CustomMinimumSize = new Vector2(0, 4),
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-            MouseFilter = Control.MouseFilterEnum.Ignore
-        };
-        barTrack.AddChild(barFill);
-        barTrack.AddChild(barEmpty);
-        wrapper.AddChild(barTrack);
-
-        card.AddChild(wrapper);
-        return card;
-    }
-
-    private static void UpdatePlayerRow(PanelContainer card, PlayerData playerData, int rowIndex)
-    {
-        var wrapper = card.GetChild(0) as VBoxContainer;
-        if (wrapper == null) return;
-
-        var row = wrapper.GetChild(0) as HBoxContainer;
-        if (row == null) return;
-
-        var labels = row.GetChildren().OfType<Label>().ToList();
-        if (labels.Count < 5) return;
-
-        var stats = _dataProvider.GetPlayerStats(playerData.PlayerInfo);
-        if (stats == null) return;
-
-        labels[1].Text = $"{stats.DamagePercent:F1}%";
-        labels[2].Text = $"{stats.RunLog?.RealDamageDealt ?? 0}";
-        labels[3].Text = $"{stats.RoomLog?.RealDamageDealt ?? 0}";
-        labels[4].Text = $"{stats.TurnLog?.RealDamageDealt ?? 0}";
-
-        var barTrack = wrapper.GetChild<HBoxContainer>(1);
-        if (barTrack == null) return;
-
-        float percent = Mathf.Clamp(stats.DamagePercent / 100f, 0.01f, 1f);
-
-        var barFill = barTrack.GetChild<ColorRect>(0);
-        if (barFill != null)
-        {
-            barFill.SizeFlagsStretchRatio = percent;
-        }
-
-        var barEmpty = barTrack.GetChild<Control>(1);
-        if (barEmpty != null)
-        {
-            barEmpty.SizeFlagsStretchRatio = 1f - percent;
-        }
-    }
-
-    private static Color DarkenColor(Color color, float amount)
-    {
-        return new Color(
-            Math.Max(0, color.R - amount),
-            Math.Max(0, color.G - amount),
-            Math.Max(0, color.B - amount),
-            color.A
-        );
-    }
-
-    private static Label MakeLabel(string text, int fontSize, Color color, bool bold = false)
-    {
-        var label = new Label
-        {
-            Text = text,
-            HorizontalAlignment = HorizontalAlignment.Left
-        };
-        label.AddThemeFontSizeOverride("font_size", fontSize);
-        label.AddThemeColorOverride("font_color", color);
-        return label;
-    }
-
+    /// <summary>创建水平分隔线控件</summary>
     private static Control HLine(int height, Color color)
     {
         return new Control
@@ -617,6 +482,7 @@ public sealed partial class AttackLogPanel : CanvasLayer
         };
     }
 
+    /// <summary>确保面板已创建并添加到场景树</summary>
     public static void EnsureCreated()
     {
         if (_instance != null) return;
@@ -625,26 +491,28 @@ public sealed partial class AttackLogPanel : CanvasLayer
         var sceneTree = Engine.GetMainLoop() as SceneTree;
         sceneTree?.Root.AddChild(_instance);
         LogState.Instance.IsLogPanelCreated = true;
-
-        _instance.SubscribeAll();
     }
 
+    /// <summary>请求刷新面板实例</summary>
     public static void RefreshInstance()
     {
         AttackLogEventBus.Publish(new RefreshRequestedEvent());
     }
 
+    /// <summary>创建面板并刷新（外部调用入口）</summary>
     public static void CreatePanel(RunState runState)
     {
         EnsureCreated();
         RefreshInstance();
     }
 
+    /// <summary>订阅 RunStarted 事件以自动创建面板</summary>
     public static void SubscribeCreationEvent()
     {
         AttackLogEventBus.Subscribe(AttackLogEventType.RunStarted, OnRunStartedForCreation);
     }
 
+    /// <summary>RunStarted 事件回调，自动创建面板并刷新</summary>
     private static void OnRunStartedForCreation(IAttackLogEvent e)
     {
         EnsureCreated();
